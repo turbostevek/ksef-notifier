@@ -28,6 +28,10 @@ _Avoid_: Nieopłacona, zaległa, należność
 Faktura zakupowa oznaczona na fakturze jako już opłacona (np. zakup w sklepie internetowym z przedpłatą). Trafia do Historii, ale nie generuje Powiadomienia.
 _Avoid_: Opłacona, zamknięta
 
+**Challenge**:
+Jednorazowy znacznik wydawany przez KSeF na potrzeby logowania tokenem. Termin zostaje w oryginalnej, angielskiej postaci, także w komunikatach dla użytkownika (nie tłumaczyć na „wyzwanie”).
+_Avoid_: Wyzwanie
+
 **Import**:
 Pobranie z KSeF paczki faktur za wskazany zakres dat i zapisanie informacji o nich w historii. Pliki faktur nie są zapisywane.
 _Avoid_: Synchronizacja, pobranie

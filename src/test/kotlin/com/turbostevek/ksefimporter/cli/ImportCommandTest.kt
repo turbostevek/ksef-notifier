@@ -1,5 +1,10 @@
 package com.turbostevek.ksefimporter.cli
 
+import com.turbostevek.ksefimporter.config.ImportConfig
+import com.turbostevek.ksefimporter.ksef.InvoiceFile
+import com.turbostevek.ksefimporter.ksef.KsefClientFactory
+import com.turbostevek.ksefimporter.ksef.KsefImportService
+import com.turbostevek.ksefimporter.ksef.KsefToken
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
@@ -22,6 +27,8 @@ class ImportCommandTest {
     @TempDir
     lateinit var dir: Path
 
+    private val importService = KsefImportService(KsefClientFactory())
+
     private val originalOut = System.out
     private val originalErr = System.err
     private val outBuffer = ByteArrayOutputStream()
@@ -40,21 +47,21 @@ class ImportCommandTest {
     }
 
     @Test
-    fun `import z poprawna konfiguracja konczy sie kodem 0`() {
+    fun `import bez tokenu KSeF konczy sie kodem 1`() {
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
-        assertEquals(0, command.exitCode)
-        assertEquals("", errBuffer.toString(Charsets.UTF_8))
+        assertEquals(1, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("ksef-importer/ksef-token"))
     }
 
     @Test
     fun `brak wymaganego parametru wypisuje czytelny blad i konczy sie kodem 1`() {
         val config = writeConfig(VALID_YAML.replace("startDate: 2026-01-01\n", ""))
 
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(1, command.exitCode)
@@ -63,7 +70,7 @@ class ImportCommandTest {
 
     @Test
     fun `brak polecenia import konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments())
 
         assertEquals(2, command.exitCode)
@@ -71,7 +78,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token z zapisanym tokenem konczy sie kodem 0 bez wypisywania wartosci`() {
-        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN))
+        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(0, command.exitCode)
@@ -81,7 +88,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token bez tokenu wskazuje nazwe sekretu do ustawienia i konczy sie kodem 1`() {
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(1, command.exitCode)
@@ -90,7 +97,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token gdy magazyn sekretow zawiedzie konczy sie kodem 1`() {
-        val command = ImportCommand(FailingSecretStore())
+        val command = ImportCommand(FailingSecretStore(), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(1, command.exitCode)
@@ -101,7 +108,7 @@ class ImportCommandTest {
     fun `config podany ze spacja zamiast znaku równości konczy sie kodem 2`() {
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config", config.toString()))
 
         assertEquals(2, command.exitCode)
@@ -109,7 +116,7 @@ class ImportCommandTest {
 
     @Test
     fun `config bez wartosci konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config"))
 
         assertEquals(2, command.exitCode)
@@ -117,10 +124,36 @@ class ImportCommandTest {
 
     @Test
     fun `config z pusta wartoscia po znaku równości konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore())
+        val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config="))
 
         assertEquals(2, command.exitCode)
+    }
+
+    @Test
+    fun `nieoczekiwany wyjatek podczas importu konczy sie kodem 4`() {
+        val failingService = object : KsefImportService(KsefClientFactory()) {
+            override fun downloadPurchaseInvoices(config: ImportConfig, token: KsefToken): List<InvoiceFile> =
+                throw IllegalStateException("awaria testowa")
+        }
+        val config = writeConfig(VALID_YAML)
+
+        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingService)
+        command.run(DefaultApplicationArguments("import", "--config=${config}"))
+
+        assertEquals(4, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Nieoczekiwany błąd importu"))
+    }
+
+    @Test
+    fun `nieoczekiwany wyjatek z magazynu sekretow podczas importu konczy sie kodem 4`() {
+        val config = writeConfig(VALID_YAML)
+
+        val command = ImportCommand(CrashingSecretStore(), importService)
+        command.run(DefaultApplicationArguments("import", "--config=${config}"))
+
+        assertEquals(4, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Nieoczekiwany błąd importu"))
     }
 
     private fun writeConfig(yaml: String): Path =
@@ -134,6 +167,10 @@ class ImportCommandTest {
 
     private class FailingSecretStore : SecretStore {
         override fun read(name: SecretName): String? = throw SecretStoreException("Nie można odczytać magazynu sekretów")
+    }
+
+    private class CrashingSecretStore : SecretStore {
+        override fun read(name: SecretName): String? = throw IllegalStateException("awaria testowa")
     }
 
     private companion object {

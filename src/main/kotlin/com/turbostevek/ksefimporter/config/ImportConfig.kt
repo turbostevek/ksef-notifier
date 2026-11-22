@@ -3,17 +3,28 @@ package com.turbostevek.ksefimporter.config
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeParseException
+
+private val POLISH_ZONE: ZoneId = ZoneId.of("Europe/Warsaw")
+
+@JvmInline
+value class Nip(val value: String)
 
 data class ImportConfig(
     val importTime: LocalTime,
     val startDate: LocalDate,
+    val nip: Nip,
     val recipientEmail: String,
     val ksefEnvironment: KsefEnvironment,
     val smtp: SmtpSettings,
-)
+) {
+    /** Start of the import window: midnight of [startDate] in Polish time. */
+    fun importFrom(): Instant = startDate.atStartOfDay(POLISH_ZONE).toInstant()
+}
 
 data class SmtpSettings(
     val host: String,
@@ -22,9 +33,9 @@ data class SmtpSettings(
     val from: String,
 )
 
-enum class KsefEnvironment(val value: String) {
-    TEST("test"),
-    PROD("prod");
+enum class KsefEnvironment(val value: String, val apiBaseUrl: String) {
+    TEST("test", "https://api-test.ksef.mf.gov.pl/v2"),
+    PROD("prod", "https://api.ksef.mf.gov.pl/v2");
 
     companion object {
         fun fromValue(value: String): KsefEnvironment? =
@@ -63,11 +74,15 @@ class ImportConfigLoader {
 
         val importTime = required("importTime", file.importTime)
         val startDate = required("startDate", file.startDate)
+        val nip = required("nip", file.nip)
         val recipientEmail = required("recipientEmail", file.recipientEmail)
         val host = required("smtp.host", smtp?.host)
         val from = required("smtp.from", smtp?.from)
         if (missing.isNotEmpty()) {
             throw ConfigException("Brak wymaganych parametrów w konfiguracji: ${missing.joinToString(", ")}")
+        }
+        if (!nip.matches(NIP_PATTERN)) {
+            throw ConfigException("Nieprawidłowa wartość parametru nip: '$nip' (wymagane 10 cyfr)")
         }
 
         val environment = file.ksef?.environment?.let {
@@ -78,6 +93,7 @@ class ImportConfigLoader {
         return ImportConfig(
             importTime = parseOrFail("importTime", importTime) { LocalTime.parse(it) },
             startDate = parseOrFail("startDate", startDate) { LocalDate.parse(it) },
+            nip = Nip(nip),
             recipientEmail = recipientEmail,
             ksefEnvironment = environment,
             smtp = SmtpSettings(
@@ -98,5 +114,6 @@ class ImportConfigLoader {
 
     private companion object {
         const val DEFAULT_SMTP_PORT = 587
+        val NIP_PATTERN = Regex("\\d{10}")
     }
 }
