@@ -33,6 +33,13 @@ class SecretToolSecretStoreTest {
     }
 
     @Test
+    fun `pusta wartosc sekretu traktowana jak brak sekretu`() {
+        val store = SecretToolSecretStore(fakeSecretTool(dir, "printf '\\n'; exit 0"))
+
+        assertNull(store.read(SecretName.KSEF_TOKEN))
+    }
+
+    @Test
     fun `blad secret-tool z komunikatem nie jest traktowany jak brak sekretu`() {
         val store = SecretToolSecretStore(fakeSecretTool(dir, """
             echo 'secret-tool: Nie można połączyć z D-Bus' >&2
