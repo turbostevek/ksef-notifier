@@ -79,6 +79,14 @@ class ImportCommandTest {
         assertEquals(2, command.exitCode)
     }
 
+    @Test
+    fun `config z pusta wartoscia po znaku równości konczy sie kodem 2`() {
+        val command = ImportCommand()
+        command.run(DefaultApplicationArguments("import", "--config="))
+
+        assertEquals(2, command.exitCode)
+    }
+
     private fun writeConfig(yaml: String): Path =
         dir.resolve("ksef-importer.yml").also { Files.writeString(it, yaml) }
 

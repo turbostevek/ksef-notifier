@@ -19,7 +19,8 @@ class ImportCommand : ApplicationRunner, ExitCodeGenerator {
 
     override fun run(args: ApplicationArguments) {
         val configValues = args.getOptionValues(CONFIG_OPTION)
-        val configWithoutValue = args.optionNames.contains(CONFIG_OPTION) && configValues.isNullOrEmpty()
+        val configWithoutValue = args.optionNames.contains(CONFIG_OPTION) &&
+            configValues?.firstOrNull().isNullOrBlank()
         if (args.nonOptionArgs != listOf(COMMAND) || configWithoutValue) {
             System.err.println("Użycie: $COMMAND [--config=<plik>]")
             exitCode = EXIT_USAGE
