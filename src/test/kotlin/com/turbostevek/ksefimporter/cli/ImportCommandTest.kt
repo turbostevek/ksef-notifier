@@ -1,7 +1,9 @@
 package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ImportConfig
+import com.turbostevek.ksefimporter.history.PurchaseInvoiceImporter
 import com.turbostevek.ksefimporter.ksef.InvoiceFile
+import com.turbostevek.ksefimporter.ksef.InvoiceSource
 import com.turbostevek.ksefimporter.ksef.KsefClientFactory
 import com.turbostevek.ksefimporter.ksef.KsefImportService
 import com.turbostevek.ksefimporter.ksef.KsefToken
@@ -21,13 +23,14 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 class ImportCommandTest {
 
     @TempDir
     lateinit var dir: Path
 
-    private val importService = KsefImportService(KsefClientFactory())
+    private val importService = PurchaseInvoiceImporter(KsefImportService(KsefClientFactory()))
 
     private val originalOut = System.out
     private val originalErr = System.err
@@ -132,10 +135,10 @@ class ImportCommandTest {
 
     @Test
     fun `nieoczekiwany wyjatek podczas importu konczy sie kodem 4`() {
-        val failingService = object : KsefImportService(KsefClientFactory()) {
-            override fun downloadPurchaseInvoices(config: ImportConfig, token: KsefToken): List<InvoiceFile> =
+        val failingService = PurchaseInvoiceImporter(object : InvoiceSource {
+            override fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile> =
                 throw IllegalStateException("awaria testowa")
-        }
+        })
         val config = writeConfig(VALID_YAML)
 
         val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingService)

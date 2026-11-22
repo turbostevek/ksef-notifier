@@ -2,8 +2,8 @@ package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ConfigException
 import com.turbostevek.ksefimporter.config.ImportConfigLoader
+import com.turbostevek.ksefimporter.history.PurchaseInvoiceImporter
 import com.turbostevek.ksefimporter.ksef.KsefException
-import com.turbostevek.ksefimporter.ksef.KsefImportService
 import com.turbostevek.ksefimporter.ksef.KsefToken
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
@@ -18,7 +18,7 @@ import java.nio.file.Path
 @Component
 class ImportCommand(
     private val secrets: SecretStore,
-    private val importService: KsefImportService,
+    private val importer: PurchaseInvoiceImporter,
 ) : ApplicationRunner, ExitCodeGenerator {
 
     private val loader = ImportConfigLoader()
@@ -71,11 +71,12 @@ class ImportCommand(
             return
         }
         try {
-            val invoices = importService.downloadPurchaseInvoices(config, KsefToken(token))
+            val result = importer.importInvoices(config, KsefToken(token), path.resolveSibling(HISTORY_DB_FILE))
             log.info(
-                "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}). Faktury nie zostały zapisane na dysku.",
-                invoices.size,
+                "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}), dodano do historii: {}. Faktury nie zostały zapisane na dysku.",
+                result.purchases,
                 config.ksefEnvironment.value,
+                result.added,
             )
             exitCode = EXIT_OK
         } catch (e: KsefException) {
@@ -114,6 +115,7 @@ class ImportCommand(
         const val CHECK_TOKEN_COMMAND = "check-token"
         const val CONFIG_OPTION = "config"
         const val DEFAULT_CONFIG_FILE = "ksef-importer.yml"
+        const val HISTORY_DB_FILE = "historia.db"
         const val EXIT_OK = 0
         const val EXIT_CONFIG_ERROR = 1
         const val EXIT_USAGE = 2

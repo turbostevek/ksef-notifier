@@ -4,13 +4,18 @@ import com.turbostevek.ksefimporter.config.ImportConfig
 import org.springframework.stereotype.Component
 import java.time.Instant
 
-/** Logs in to KSeF and downloads the purchase invoices for the configured import window. */
-@Component
-class KsefImportService(private val clientFactory: KsefClientFactory) {
+/** Downloads the purchase invoice files from KSeF for the given time window. */
+interface InvoiceSource {
+    fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile>
+}
 
-    fun downloadPurchaseInvoices(config: ImportConfig, token: KsefToken): List<InvoiceFile> {
+/** Logs in to KSeF and downloads the purchase invoices for the requested window. */
+@Component
+class KsefImportService(private val clientFactory: KsefClientFactory) : InvoiceSource {
+
+    override fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile> {
         val client = clientFactory.create(config.ksefEnvironment.apiBaseUrl)
         val accessToken = client.login(token, config.nip)
-        return client.downloadInvoices(accessToken, config.importFrom(), Instant.now())
+        return client.downloadInvoices(accessToken, from, to)
     }
 }
