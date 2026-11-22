@@ -18,16 +18,21 @@ class ImportCommand : ApplicationRunner, ExitCodeGenerator {
     override fun getExitCode(): Int = exitCode
 
     override fun run(args: ApplicationArguments) {
-        if (args.nonOptionArgs.firstOrNull() != COMMAND) {
+        val configValues = args.getOptionValues(CONFIG_OPTION)
+        val configWithoutValue = args.optionNames.contains(CONFIG_OPTION) && configValues.isNullOrEmpty()
+        if (args.nonOptionArgs != listOf(COMMAND) || configWithoutValue) {
             System.err.println("Użycie: $COMMAND [--config=<plik>]")
             exitCode = EXIT_USAGE
             return
         }
 
-        val path = Path.of(args.getOptionValues(CONFIG_OPTION)?.firstOrNull() ?: DEFAULT_CONFIG_FILE)
+        val path = Path.of(configValues?.firstOrNull() ?: DEFAULT_CONFIG_FILE)
         try {
             val config = loader.load(path)
-            log.info("Konfiguracja poprawna (środowisko KSeF: {}). Pobieranie faktur nie jest jeszcze zaimplementowane.", config.ksefEnvironment.value)
+            log.info(
+                "Konfiguracja poprawna (środowisko KSeF: {}). Import nie jest jeszcze zaimplementowany.",
+                config.ksefEnvironment.value,
+            )
             exitCode = EXIT_OK
         } catch (e: ConfigException) {
             System.err.println("Błąd konfiguracji: ${e.message}")

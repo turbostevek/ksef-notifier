@@ -16,7 +16,7 @@ Wynik: `build/libs/ksef-importer-0.0.1-SNAPSHOT.jar` (fat JAR).
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar import --config=ksef-importer.yml
 ```
 
-Parametr `--config` jest opcjonalny; domyślnie używany jest plik `ksef-importer.yml` w bieżącym katalogu.
+Parametr `--config` przyjmuje wyłącznie formę `--config=<plik>`; forma z spacją jest odrzucana (kod 2). Parametr jest opcjonalny; domyślnie używany jest plik `ksef-importer.yml` w bieżącym katalogu.
 
 Kody wyjścia:
 
