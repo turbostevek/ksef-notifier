@@ -53,15 +53,18 @@ internal object KsefCrypto {
         val files = mutableListOf<InvoiceFile>()
         ZipInputStream(ByteArrayInputStream(archive)).use { zip ->
             generateSequence { zip.nextEntry }
-                .filter { !it.isDirectory }
+                .filter { !it.isDirectory && it.name.endsWith(".xml", ignoreCase = true) }
                 .forEach { entry ->
                     val buffer = ByteArrayOutputStream()
                     zip.copyTo(buffer)
-                    files += InvoiceFile(entry.name, buffer.toByteArray())
+                    files += InvoiceFile(ksefNumberOf(entry.name), buffer.toByteArray())
                 }
         }
         return files
     }
+
+    /** KSeF names each invoice file `{ksefNumber}.xml` in the package. */
+    private fun ksefNumberOf(entryName: String): String = entryName.substringAfterLast('/').substringBeforeLast('.')
 
     private const val RSA_OAEP = "RSA/ECB/OAEPPadding"
     private const val AES_CBC = "AES/CBC/PKCS5Padding"

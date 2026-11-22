@@ -18,7 +18,7 @@ import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.kotlinModule
 
-data class InvoiceFile(val name: String, val xml: ByteArray)
+data class InvoiceFile(val ksefNumber: String, val xml: ByteArray)
 
 class KsefException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
@@ -81,13 +81,14 @@ class KsefClient(
     fun downloadInvoices(accessToken: AccessToken, from: Instant, to: Instant): List<InvoiceFile> {
         val encryptionCertificate = fetchCertificate(USAGE_SYMMETRIC_KEY_ENCRYPTION)
         val invoices = linkedMapOf<String, InvoiceFile>()
+
         var windowStart = from
         while (windowStart < to) {
             val windowEnd = minOf(windowStart.plus(EXPORT_WINDOW), to)
             var cursor = windowStart
             while (true) {
                 val export = exportPackage(accessToken, cursor, windowEnd, encryptionCertificate)
-                export.files.filter { it.name.endsWith(".xml", ignoreCase = true) }.forEach { invoices.putIfAbsent(it.name, it) }
+                export.files.forEach { invoices.putIfAbsent(it.ksefNumber, it) }
                 if (!export.isTruncated) break
                 val next = export.continuationDate
                     ?: throw KsefException("Paczka faktur została obcięta, a KSeF nie podał daty kontynuacji")
