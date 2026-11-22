@@ -8,8 +8,8 @@ import com.sun.jna.win32.StdCallLibrary
 import com.sun.jna.ptr.PointerByReference
 
 /**
- * Windows implementation backed by Credential Manager (generic credential `service/account`).
- * The password is read as UTF-16LE, the encoding Credential Manager uses when a password is entered in its UI.
+ * Generic credential target is `service/account`. The password is read as UTF-16LE,
+ * the encoding Credential Manager uses when a password is entered in its UI.
  */
 class WindowsCredentialSecretStore : SecretStore {
 

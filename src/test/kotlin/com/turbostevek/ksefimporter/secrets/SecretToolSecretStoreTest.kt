@@ -2,6 +2,7 @@ package com.turbostevek.ksefimporter.secrets
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
@@ -29,6 +30,18 @@ class SecretToolSecretStoreTest {
         val store = SecretToolSecretStore(fakeSecretTool(dir, "exit 1"))
 
         assertNull(store.read(SecretName.KSEF_TOKEN))
+    }
+
+    @Test
+    fun `blad secret-tool z komunikatem nie jest traktowany jak brak sekretu`() {
+        val store = SecretToolSecretStore(fakeSecretTool(dir, """
+            echo 'secret-tool: Nie można połączyć z D-Bus' >&2
+            exit 1
+        """.trimIndent()))
+
+        val error = assertThrows<SecretStoreException> { store.read(SecretName.KSEF_TOKEN) }
+
+        assertTrue(error.message!!.contains("Nie można połączyć z D-Bus"))
     }
 
     @Test
