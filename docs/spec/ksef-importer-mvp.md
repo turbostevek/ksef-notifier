@@ -113,18 +113,18 @@ Brak testów na prawdziwym KSeF i SMTP w CI. Testy integracyjne z środowiskiem 
 - Tryby powiadomień (`PER_INVOICE`/`DAILY_DIGEST`) zostały porzucone. Obowiązuje jeden zbiorczy mail na przebieg, co najwyżej jeden na dobę, bez maila przy braku nowych faktur do zapłaty.
 - **Zweryfikowano (issue #3, źródła: repozytorium CIRFMF/ksef-api, XSD FA(3) `schemat_FA(3)_v1-0E.xsd`)**:
   - Oznaczenie zapłaty: `Fa/Platnosc/Zaplacono` = `1` (zapłacono). Obok może być `Fa/Platnosc/DataZaplaty`. Blok `Platnosc` jest opcjonalny.
-  - Płatność częściowa: `Fa/Platnosc/ZnacznikZaplatyCzesciowej` (`1` = w części, `2` = w całości w ratach, ostatnia płatność jest końcowa), z `ZaplataCzesciowa`. Faktura z płatnością częściową jest traktowana jako nieopłacona.
+  - Płatność częściowa: `Fa/Platnosc/ZnacznikZaplatyCzesciowej` (`1` = w części, `2` = w całości w ratach), z `ZaplataCzesciowa`. Faktura z płatnością częściową jest traktowana jako nieopłacona.
   - Termin: `Fa/Platnosc/TerminPlatnosci/Termin` (typ data). Metadane API tego nie zawierają.
   - Środowisko TEST: `https://api-test.ksef.mf.gov.pl/v2`. Środowiska DEMO i PROD mają inne hosty (`api-demo`, `api`), tylko zmienia się adres bazowy.
   - Uwierzytelnianie tokenem KSeF:
     1. `POST /auth/challenge` zwraca `challenge` i `timestamp` (ważność 10 minut).
     2. Szyfrowanie: ciąg `{tokenKSeF}|{timestampMs}` szyfrowany RSA-OAEP (SHA-256, MGF1 SHA-256) kluczem publicznym KSeF o `usage` = `KsefTokenEncryption`, wynik Base64.
     3. `POST /auth/ksef-token` z zaszyfrowanym tokenem, challenge i kontekstem (NIP). Odpowiedź: `authenticationToken` i `referenceNumber`.
-    4. `GET /auth/{referenceNumber}` z nagłówkiem `Authorization: Bearer <authenticationToken>`, aż status będzie sukcesem. Na TEST status może długo zostawać „w toku”.
+    4. `GET /auth/{referenceNumber}` z nagłówkiem `Authorization: Bearer <authenticationToken>`, aż status będzie sukcesem.
     5. `POST /auth/token/redeem` (jednorazowo, z `authenticationToken`) zwraca `accessToken` (JWT, krótki) i `refreshToken` (do 7 dni).
     6. Odświeżanie: `POST /auth/token/refresh` z `refreshToken` w nagłówku Bearer.
-  - Sesja interaktywna (do wysyłki faktur, do późniejszej decyzji): klucz AES-256 i IV 128 bitów, szyfrowanie AES-256-CBC z PKCS#7, klucz szyfrowany RSA-OAEP kluczem `SymmetricKeyEncryption`. Pobieranie faktur (MVP) idzie przez eksport z szyfrowaniem paczek; szczegóły do ustalenia przy implementacji klienta.
-- **Nowe założenia (do decyzji właściciela)**:
+  - Sesja interaktywna (do wysyłki faktur, poza zakresem MVP): klucz AES-256 i IV 128 bitów, szyfrowanie AES-256-CBC z PKCS#7, klucz AES szyfrowany RSA-OAEP kluczem `SymmetricKeyEncryption`.
+- **Założenia**:
   1. Płatność częściowa (`ZnacznikZaplatyCzesciowej` = `1` lub `2`) nie oznacza faktury jako opłaconej. Tylko `Zaplacono` = `1` ją oznacza.
   2. Gdy w fakturze jest wiele `TerminPlatnosci`, parser bierze najwcześniejszy `Termin`.
   3. Ścieżki i zachowanie z dokumentacji są zgodne z OpenAPI TEST, ale nie zostały sprawdzone na żywym środowisku. Wymaga ręcznego testu z tokenem testowym (open-items).
