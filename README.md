@@ -24,11 +24,14 @@ Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym maga
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 ```
 
+Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji, pobiera faktury zakupowe (podmiot 2, nabywca) od `startDate` do chwili obecnej i zlicza je. Pliki faktur są przetwarzane w pamięci i nie są zapisywane na dysku. Zapis do Historii i powiadomienia są poza zakresem tego polecenia.
+
 Kody wyjścia:
 
-- `0` – konfiguracja poprawna (lub token zapisany, dla `check-token`)
+- `0` – konfiguracja poprawna, import zakończony (lub token zapisany, dla `check-token`)
 - `1` – błąd konfiguracji (brak parametru, nieprawidłowa wartość, brak pliku) albo brak tokenu KSeF w magazynie sekretów; komunikat jest wypisywany na stderr
 - `2` – brak polecenia `import` lub `check-token`
+- `3` – błąd KSeF (token odrzucony lub wygasły, błąd eksportu, brak połączenia); komunikat jest logowany jako błąd i wypisywany na stderr
 
 ## Token KSeF
 

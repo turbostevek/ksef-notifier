@@ -2,6 +2,8 @@ package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ConfigException
 import com.turbostevek.ksefimporter.config.ImportConfigLoader
+import com.turbostevek.ksefimporter.ksef.KsefClient
+import com.turbostevek.ksefimporter.ksef.KsefException
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
@@ -11,6 +13,8 @@ import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.ExitCodeGenerator
 import org.springframework.stereotype.Component
 import java.nio.file.Path
+import java.time.Instant
+import java.time.ZoneOffset
 
 @Component
 class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitCodeGenerator {
@@ -41,26 +45,47 @@ class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitC
             return
         }
         val path = Path.of(configValues?.firstOrNull() ?: DEFAULT_CONFIG_FILE)
-        try {
-            val config = loader.load(path)
-            log.info(
-                "Konfiguracja poprawna (środowisko KSeF: {}). Import nie jest jeszcze zaimplementowany.",
-                config.ksefEnvironment.value,
-            )
-            exitCode = EXIT_OK
+        val config = try {
+            loader.load(path)
         } catch (e: ConfigException) {
             System.err.println("Błąd konfiguracji: ${e.message}")
             exitCode = EXIT_CONFIG_ERROR
+            return
+        }
+        val token = try {
+            secrets.read(SecretName.KSEF_TOKEN)
+        } catch (e: SecretStoreException) {
+            System.err.println("Błąd magazynu sekretów: ${e.message}")
+            exitCode = EXIT_CONFIG_ERROR
+            return
+        }
+        if (token == null) {
+            System.err.println(MISSING_TOKEN_MESSAGE)
+            exitCode = EXIT_CONFIG_ERROR
+            return
+        }
+        try {
+            val client = KsefClient(config.ksefEnvironment.apiBaseUrl)
+            val accessToken = client.login(token, config.nip)
+            val from = config.startDate.atStartOfDay(ZoneOffset.UTC).toInstant()
+            val invoices = client.downloadInvoices(accessToken, from, Instant.now())
+            log.info(
+                "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}). Faktury nie zostały zapisane na dysku.",
+                invoices.size,
+                config.ksefEnvironment.value,
+            )
+            exitCode = EXIT_OK
+        } catch (e: KsefException) {
+            log.error("Błąd KSeF: {}", e.message)
+            System.err.println("Błąd KSeF: ${e.message}")
+            exitCode = EXIT_KSEF_ERROR
         }
     }
 
     private fun runCheckToken() {
         try {
             if (secrets.read(SecretName.KSEF_TOKEN) == null) {
-                System.err.println(
-                    "Brak sekretu '${SecretName.KSEF_TOKEN.qualifiedName}' w systemowym magazynie sekretów. " +
-                        "Zapisz token KSeF pod tą nazwą.",
-                )
+                System.err.println(MISSING_TOKEN_MESSAGE)
                 exitCode = EXIT_CONFIG_ERROR
             } else {
                 System.out.println("Token KSeF jest zapisany w magazynie sekretów.")
@@ -81,5 +106,8 @@ class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitC
         const val EXIT_OK = 0
         const val EXIT_CONFIG_ERROR = 1
         const val EXIT_USAGE = 2
+        const val EXIT_KSEF_ERROR = 3
+        val MISSING_TOKEN_MESSAGE = "Brak sekretu '${SecretName.KSEF_TOKEN.qualifiedName}' w systemowym magazynie sekretów. " +
+            "Zapisz token KSeF pod tą nazwą."
     }
 }

@@ -10,6 +10,7 @@ import java.time.format.DateTimeParseException
 data class ImportConfig(
     val importTime: LocalTime,
     val startDate: LocalDate,
+    val nip: String,
     val recipientEmail: String,
     val ksefEnvironment: KsefEnvironment,
     val smtp: SmtpSettings,
@@ -22,9 +23,9 @@ data class SmtpSettings(
     val from: String,
 )
 
-enum class KsefEnvironment(val value: String) {
-    TEST("test"),
-    PROD("prod");
+enum class KsefEnvironment(val value: String, val apiBaseUrl: String) {
+    TEST("test", "https://api-test.ksef.mf.gov.pl/v2"),
+    PROD("prod", "https://api.ksef.mf.gov.pl/v2");
 
     companion object {
         fun fromValue(value: String): KsefEnvironment? =
@@ -63,11 +64,15 @@ class ImportConfigLoader {
 
         val importTime = required("importTime", file.importTime)
         val startDate = required("startDate", file.startDate)
+        val nip = required("nip", file.nip)
         val recipientEmail = required("recipientEmail", file.recipientEmail)
         val host = required("smtp.host", smtp?.host)
         val from = required("smtp.from", smtp?.from)
         if (missing.isNotEmpty()) {
             throw ConfigException("Brak wymaganych parametrów w konfiguracji: ${missing.joinToString(", ")}")
+        }
+        if (!isValidNip(nip)) {
+            throw ConfigException("Nieprawidłowa wartość parametru nip: '$nip' (wymagane 10 cyfr z poprawną sumą kontrolną)")
         }
 
         val environment = file.ksef?.environment?.let {
@@ -78,6 +83,7 @@ class ImportConfigLoader {
         return ImportConfig(
             importTime = parseOrFail("importTime", importTime) { LocalTime.parse(it) },
             startDate = parseOrFail("startDate", startDate) { LocalDate.parse(it) },
+            nip = nip,
             recipientEmail = recipientEmail,
             ksefEnvironment = environment,
             smtp = SmtpSettings(
@@ -98,5 +104,12 @@ class ImportConfigLoader {
 
     private companion object {
         const val DEFAULT_SMTP_PORT = 587
+        val NIP_WEIGHTS = intArrayOf(6, 5, 7, 2, 3, 4, 5, 6, 7)
+    }
+
+    private fun isValidNip(nip: String): Boolean {
+        if (!nip.matches(Regex("\\d{10}"))) return false
+        val sum = NIP_WEIGHTS.indices.sumOf { NIP_WEIGHTS[it] * (nip[it] - '0') }
+        return sum % 11 == nip[9] - '0'
     }
 }

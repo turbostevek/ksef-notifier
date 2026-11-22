@@ -26,6 +26,7 @@ internal class ConfigFileParser(
 internal data class ConfigFile(
     val importTime: String? = null,
     val startDate: String? = null,
+    val nip: String? = null,
     val recipientEmail: String? = null,
     val ksef: KsefFile? = null,
     val smtp: SmtpFile? = null,

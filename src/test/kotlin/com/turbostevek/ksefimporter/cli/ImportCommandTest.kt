@@ -40,14 +40,14 @@ class ImportCommandTest {
     }
 
     @Test
-    fun `import z poprawna konfiguracja konczy sie kodem 0`() {
+    fun `import bez tokenu KSeF konczy sie kodem 1`() {
         val config = writeConfig(VALID_YAML)
 
         val command = ImportCommand(FakeSecretStore())
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
-        assertEquals(0, command.exitCode)
-        assertEquals("", errBuffer.toString(Charsets.UTF_8))
+        assertEquals(1, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("ksef-importer/ksef-token"))
     }
 
     @Test

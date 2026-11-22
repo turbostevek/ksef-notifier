@@ -20,6 +20,7 @@ class ImportConfigLoaderTest {
             """
             importTime: "07:30"
             startDate: 2026-01-01
+            nip: "9261051389"
             recipientEmail: zona@example.com
             ksef:
               environment: prod
@@ -33,6 +34,7 @@ class ImportConfigLoaderTest {
 
         assertEquals(LocalTime.of(7, 30), config.importTime)
         assertEquals(LocalDate.of(2026, 1, 1), config.startDate)
+        assertEquals("9261051389", config.nip)
         assertEquals("zona@example.com", config.recipientEmail)
         assertEquals(KsefEnvironment.PROD, config.ksefEnvironment)
         assertEquals("smtp.example.com", config.smtp.host)
@@ -46,6 +48,24 @@ class ImportConfigLoaderTest {
         val config = loader.parse(minimalValidYaml)
 
         assertEquals(KsefEnvironment.TEST, config.ksefEnvironment)
+    }
+
+    @Test
+    fun `nip z bledna suma kontrolna jest odrzucany`() {
+        val yaml = minimalValidYaml.replace("9261051389", "9261051388")
+
+        val error = assertThrows<ConfigException> { loader.parse(yaml) }
+
+        assertTrue(error.message!!.contains("nip"), error.message)
+    }
+
+    @Test
+    fun `nip o innej dlugosci niz 10 cyfr jest odrzucany`() {
+        val yaml = minimalValidYaml.replace("9261051389", "926105138")
+
+        val error = assertThrows<ConfigException> { loader.parse(yaml) }
+
+        assertTrue(error.message!!.contains("nip"), error.message)
     }
 
     @Test
