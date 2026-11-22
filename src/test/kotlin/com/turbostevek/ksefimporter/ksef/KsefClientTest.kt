@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import tools.jackson.databind.json.JsonMapper
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.security.KeyStore
@@ -77,6 +78,17 @@ class KsefClientTest {
         assertEquals("$TOKEN|$TIMESTAMP_MS", receivedKsefToken)
         assertEquals(listOf("faktura.xml"), invoices.map { it.name })
         assertEquals(INVOICE_XML, String(invoices.single().xml, Charsets.UTF_8))
+    }
+
+    @Test
+    fun `pobieranie faktur nie zapisuje plikow w katalogu roboczym`() {
+        val workDir = File(System.getProperty("user.dir"))
+        val entriesBefore = workDir.list()!!.toSet()
+        val client = client()
+
+        client.downloadInvoices(client.login(KsefToken(TOKEN), NIP), Instant.now().minusSeconds(86_400), Instant.now())
+
+        assertEquals(entriesBefore, workDir.list()!!.toSet())
     }
 
     @Test
