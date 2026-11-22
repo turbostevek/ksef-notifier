@@ -2,6 +2,7 @@ package com.turbostevek.ksefimporter.ksef
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import com.turbostevek.ksefimporter.config.Nip
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -208,7 +209,7 @@ class KsefClientTest {
     private companion object {
         const val ALIAS = "ksef-test"
         val PASSWORD = "changeit".toCharArray()
-        const val NIP = "9261051389"
+        val NIP = Nip("9261051389")
         const val TOKEN = "test-token"
         const val CHALLENGE = "challenge-1"
         const val TIMESTAMP_MS = 1_767_225_600_000L

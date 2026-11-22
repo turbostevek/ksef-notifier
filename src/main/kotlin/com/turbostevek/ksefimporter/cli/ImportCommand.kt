@@ -2,7 +2,7 @@ package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ConfigException
 import com.turbostevek.ksefimporter.config.ImportConfigLoader
-import com.turbostevek.ksefimporter.ksef.KsefClient
+import com.turbostevek.ksefimporter.ksef.KsefClientFactory
 import com.turbostevek.ksefimporter.ksef.KsefException
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
@@ -14,10 +14,13 @@ import org.springframework.boot.ExitCodeGenerator
 import org.springframework.stereotype.Component
 import java.nio.file.Path
 import java.time.Instant
-import java.time.ZoneOffset
+import java.time.ZoneId
 
 @Component
-class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitCodeGenerator {
+class ImportCommand(
+    private val secrets: SecretStore,
+    private val clientFactory: KsefClientFactory,
+) : ApplicationRunner, ExitCodeGenerator {
 
     private val loader = ImportConfigLoader()
     private var exitCode = EXIT_OK
@@ -65,9 +68,9 @@ class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitC
             return
         }
         try {
-            val client = KsefClient(config.ksefEnvironment.apiBaseUrl)
+            val client = clientFactory.create(config.ksefEnvironment.apiBaseUrl)
             val accessToken = client.login(token, config.nip)
-            val from = config.startDate.atStartOfDay(ZoneOffset.UTC).toInstant()
+            val from = config.startDate.atStartOfDay(POLISH_ZONE).toInstant()
             val invoices = client.downloadInvoices(accessToken, from, Instant.now())
             log.info(
                 "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}). Faktury nie zostały zapisane na dysku.",
@@ -103,6 +106,7 @@ class ImportCommand(private val secrets: SecretStore) : ApplicationRunner, ExitC
         const val CHECK_TOKEN_COMMAND = "check-token"
         const val CONFIG_OPTION = "config"
         const val DEFAULT_CONFIG_FILE = "ksef-importer.yml"
+        val POLISH_ZONE: ZoneId = ZoneId.of("Europe/Warsaw")
         const val EXIT_OK = 0
         const val EXIT_CONFIG_ERROR = 1
         const val EXIT_USAGE = 2

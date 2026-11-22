@@ -24,7 +24,7 @@ Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym maga
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 ```
 
-Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji, pobiera faktury zakupowe (podmiot 2, nabywca) od `startDate` do chwili obecnej i zlicza je. Pliki faktur są przetwarzane w pamięci i nie są zapisywane na dysku. Zapis do Historii i powiadomienia są poza zakresem tego polecenia.
+Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji, pobiera faktury zakupowe (podmiot 2, nabywca) od `startDate` (od północy czasu polskiego, Europe/Warsaw) do chwili obecnej i zlicza je. Pliki faktur są przetwarzane w pamięci i nie są zapisywane na dysku. Zapis do Historii i powiadomienia są poza zakresem tego polecenia.
 
 Kody wyjścia:
 
@@ -52,7 +52,7 @@ Ręczne sprawdzenie przepływu uwierzytelniania na TEST (bez aplikacji): kolekcj
 Plik YAML bez sekretów. Token KSeF i hasło SMTP nie należą do tego pliku; klucze spoza poniższego schematu (np. `smtp.password`) powodują błąd.
 
 ```yaml
-nip: "1234563218"            # wymagane, 10 cyfr z poprawną sumą kontrolną, NIP podmiotu
+nip: "1234563218"            # wymagane, 10 cyfr, NIP podmiotu
 importTime: "07:30"          # wymagane, format HH:mm
 startDate: 2026-01-01        # wymagane, data startowa pierwszego importu
 recipientEmail: zona@example.com   # wymagane

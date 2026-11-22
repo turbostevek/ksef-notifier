@@ -1,11 +1,13 @@
 package com.turbostevek.ksefimporter.ksef
 
+import com.turbostevek.ksefimporter.config.Nip
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.security.GeneralSecurityException
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.time.Instant
@@ -21,8 +23,8 @@ data class InvoiceFile(val name: String, val xml: ByteArray)
 class KsefException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 /**
- * Klient KSeF API v2: logowanie tokenem KSeF i pobranie faktur zakupowych (nabywca = podmiot 2).
- * Wszystkie dane są przetwarzane w pamięci; pliki faktur nie są zapisywane na dysku.
+ * KSeF API v2 client: logs in with a KSeF token and downloads purchase invoices (buyer = subject 2).
+ * All data is processed in memory; invoice files are never written to disk.
  */
 class KsefClient(
     apiBaseUrl: String,
@@ -35,22 +37,22 @@ class KsefClient(
         .addModule(kotlinModule())
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         .build()
-    private val crypto = KsefCrypto
-
-    /** Zwraca access token do kolejnych wywołań API. */
-    fun login(token: String, nip: String): String {
+    /** Returns the access token for subsequent API calls. */
+    fun login(token: String, nip: Nip): String {
         val tokenCertificate = fetchCertificate(USAGE_TOKEN_ENCRYPTION)
         val challenge = post("/auth/challenge", body = null, operation = "Pobranie challenge")
             .let { readJson<ChallengeResponse>(it, "Pobranie challenge") }
-        val encryptedToken = crypto.rsaOaepEncrypt(
-            "$token|${challenge.timestampMs}".toByteArray(Charsets.UTF_8),
-            tokenCertificate.certificate,
-        )
+        val encryptedToken = cryptoStep("Logowanie tokenem KSeF") {
+            KsefCrypto.rsaOaepEncrypt(
+                "$token|${challenge.timestampMs}".toByteArray(Charsets.UTF_8),
+                tokenCertificate.certificate,
+            )
+        }
         val init = post(
             "/auth/ksef-token",
             body = mapOf(
                 "challenge" to challenge.challenge,
-                "contextIdentifier" to mapOf("type" to "Nip", "value" to nip),
+                "contextIdentifier" to mapOf("type" to "Nip", "value" to nip.value),
                 "encryptedToken" to Base64.getEncoder().encodeToString(encryptedToken),
                 "publicKeyId" to tokenCertificate.publicKeyId,
             ),
@@ -71,8 +73,8 @@ class KsefClient(
     }
 
     /**
-     * Pobiera faktury zakupowe (nabywca) z zakresu dat. Zakres jest dzielony na okna zgodne z limitem KSeF;
-     * paczka obcięta przez KSeF jest dobierana kolejnymi eksportami od daty kontynuacji.
+     * Downloads purchase invoices (buyer) for the date range. The range is split into windows within the KSeF
+     * limit; a package truncated by KSeF is continued with further exports from the continuation date.
      */
     fun downloadInvoices(accessToken: String, from: Instant, to: Instant): List<InvoiceFile> {
         val encryptionCertificate = fetchCertificate(USAGE_SYMMETRIC_KEY_ENCRYPTION)
@@ -103,12 +105,16 @@ class KsefClient(
         to: Instant,
         encryptionCertificate: CertificateWithId,
     ): ExportResult {
-        val symmetricKey = crypto.newAes256Key()
-        val iv = crypto.newIv()
+        val symmetricKey = KsefCrypto.newAes256Key()
+        val iv = KsefCrypto.newIv()
         val body = mapOf(
             "encryption" to mapOf(
                 "encryptedSymmetricKey" to Base64.getEncoder()
-                    .encodeToString(crypto.rsaOaepEncrypt(symmetricKey, encryptionCertificate.certificate)),
+                    .encodeToString(
+                        cryptoStep("Eksport faktur") {
+                            KsefCrypto.rsaOaepEncrypt(symmetricKey, encryptionCertificate.certificate)
+                        },
+                    ),
                 "initializationVector" to Base64.getEncoder().encodeToString(iv),
                 "publicKeyId" to encryptionCertificate.publicKeyId,
             ),
@@ -139,20 +145,21 @@ class KsefClient(
             val bytes = download(part.url, part.encryptedPartHash)
             encrypted.write(bytes)
         }
-        val archive = crypto.aes256CbcDecrypt(encrypted.toByteArray(), symmetricKey, iv)
+        val archive = cryptoStep("Odszyfrowanie paczki faktur") {
+            KsefCrypto.aes256CbcDecrypt(encrypted.toByteArray(), symmetricKey, iv)
+        }
 
         return ExportResult(
-            files = crypto.unzip(archive),
+            files = cryptoStep("Rozpakowanie paczki faktur") { KsefCrypto.unzip(archive) },
             isTruncated = pkg.isTruncated,
             continuationDate = pkg.lastPermanentStorageDate?.let(::parseKsefDate),
         )
     }
 
     private fun download(url: String, expectedHash: String): ByteArray {
-        val response = send(HttpRequest.newBuilder(URI.create(url)).GET().build(), "Pobranie części paczki")
-        requireSuccess(response, "Pobranie części paczki")
+        val response = fetch(HttpRequest.newBuilder(URI.create(url)).GET().build(), "Pobranie części paczki")
         val bytes = response.body()
-        if (crypto.sha256Base64(bytes) != expectedHash) {
+        if (KsefCrypto.sha256Base64(bytes) != expectedHash) {
             throw KsefException("Pobrana część paczki ma niezgodny skrót SHA-256")
         }
         return bytes
@@ -166,7 +173,8 @@ class KsefClient(
             .filter { usage in it.usage && parseKsefDate(it.validTo).isAfter(now) }
             .maxByOrNull { parseKsefDate(it.validTo) }
             ?: throw KsefException("KSeF nie zwrócił aktywnego certyfikatu: $usage")
-        return CertificateWithId(crypto.parseCertificate(certificate.certificate), certificate.publicKeyId)
+        val x509 = cryptoStep("Pobranie certyfikatów KSeF") { KsefCrypto.parseCertificate(certificate.certificate) }
+        return CertificateWithId(x509, certificate.publicKeyId)
     }
 
     private fun <T> awaitStatus(operation: String, statusOf: (T) -> StatusInfo, fetch: () -> T): T {
@@ -183,8 +191,7 @@ class KsefClient(
     }
 
     private fun get(path: String, bearer: String? = null, operation: String): HttpResponse<ByteArray> {
-        val request = request(path, bearer).GET().build()
-        return send(request, operation).also { requireSuccess(it, operation) }
+        return fetch(request(path, bearer).GET().build(), operation)
     }
 
     private fun post(
@@ -195,8 +202,7 @@ class KsefClient(
     ): HttpResponse<ByteArray> {
         val builder = request(path, bearer).header("Content-Type", "application/json")
         val payload = if (body == null) "" else mapper.writeValueAsString(body)
-        val request = builder.POST(HttpRequest.BodyPublishers.ofString(payload)).build()
-        return send(request, operation).also { requireSuccess(it, operation) }
+        return fetch(builder.POST(HttpRequest.BodyPublishers.ofString(payload)).build(), operation)
     }
 
     private fun request(path: String, bearer: String?): HttpRequest.Builder {
@@ -205,6 +211,9 @@ class KsefClient(
             .timeout(Duration.ofSeconds(60))
         return if (bearer != null) builder.header("Authorization", "Bearer $bearer") else builder
     }
+
+    private fun fetch(request: HttpRequest, operation: String): HttpResponse<ByteArray> =
+        send(request, operation).also { requireSuccess(it, operation) }
 
     private fun send(request: HttpRequest, operation: String): HttpResponse<ByteArray> =
         try {
@@ -236,6 +245,17 @@ class KsefClient(
             mapper.readValue(response.body(), T::class.java)
         } catch (e: Exception) {
             throw KsefException("$operation: nieoczekiwana odpowiedź KSeF", e)
+        }
+
+    private inline fun <T> cryptoStep(operation: String, block: () -> T): T =
+        try {
+            block()
+        } catch (e: GeneralSecurityException) {
+            throw KsefException("$operation: błąd kryptograficzny (${e.message})", e)
+        } catch (e: IOException) {
+            throw KsefException("$operation: nieprawidłowe dane paczki (${e.message})", e)
+        } catch (e: IllegalArgumentException) {
+            throw KsefException("$operation: nieprawidłowe dane KSeF (${e.message})", e)
         }
 
     private fun parseKsefDate(value: String): Instant =

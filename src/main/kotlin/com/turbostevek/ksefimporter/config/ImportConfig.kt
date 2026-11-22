@@ -7,10 +7,13 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeParseException
 
+@JvmInline
+value class Nip(val value: String)
+
 data class ImportConfig(
     val importTime: LocalTime,
     val startDate: LocalDate,
-    val nip: String,
+    val nip: Nip,
     val recipientEmail: String,
     val ksefEnvironment: KsefEnvironment,
     val smtp: SmtpSettings,
@@ -71,8 +74,8 @@ class ImportConfigLoader {
         if (missing.isNotEmpty()) {
             throw ConfigException("Brak wymaganych parametrów w konfiguracji: ${missing.joinToString(", ")}")
         }
-        if (!isValidNip(nip)) {
-            throw ConfigException("Nieprawidłowa wartość parametru nip: '$nip' (wymagane 10 cyfr z poprawną sumą kontrolną)")
+        if (!nip.matches(NIP_PATTERN)) {
+            throw ConfigException("Nieprawidłowa wartość parametru nip: '$nip' (wymagane 10 cyfr)")
         }
 
         val environment = file.ksef?.environment?.let {
@@ -83,7 +86,7 @@ class ImportConfigLoader {
         return ImportConfig(
             importTime = parseOrFail("importTime", importTime) { LocalTime.parse(it) },
             startDate = parseOrFail("startDate", startDate) { LocalDate.parse(it) },
-            nip = nip,
+            nip = Nip(nip),
             recipientEmail = recipientEmail,
             ksefEnvironment = environment,
             smtp = SmtpSettings(
@@ -104,12 +107,6 @@ class ImportConfigLoader {
 
     private companion object {
         const val DEFAULT_SMTP_PORT = 587
-        val NIP_WEIGHTS = intArrayOf(6, 5, 7, 2, 3, 4, 5, 6, 7)
-    }
-
-    private fun isValidNip(nip: String): Boolean {
-        if (!nip.matches(Regex("\\d{10}"))) return false
-        val sum = NIP_WEIGHTS.indices.sumOf { NIP_WEIGHTS[it] * (nip[it] - '0') }
-        return sum % 11 == nip[9] - '0'
+        val NIP_PATTERN = Regex("\\d{10}")
     }
 }
