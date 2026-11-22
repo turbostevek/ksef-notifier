@@ -51,6 +51,10 @@ Stack: Kotlin, Spring Boot, JVM 21, budowanie przez Gradle lub Maven (do wyboru 
 
 Moduły:
 - **Konfiguracja**: wczytuje plik z godziną importu, datą startową, adresem odbiorcy, środowiskiem KSeF (domyślnie test), ustawieniami SMTP. Odwołuje się do sekretów po nazwie, nie zawiera ich wartości.
+  - Format pliku: YAML.
+  - Lokalizacja: katalog użytkownika (Windows `%APPDATA%\ksef-importer`, Linux `~/.config/ksef-importer`). Ścieżkę można nadpisać argumentem CLI.
+  - Kolejność nadpisywania: argument CLI > zmienna środowiskowa > plik. Plik jest źródłem wartości domyślnych.
+  - Brak pliku: czytelny błąd z podaną ścieżką i instrukcją, bez tworzenia pliku.
 - **Magazyn sekretów**: abstrakcja nad systemowym magazynem (Windows Credential Manager, libsecret na Ubuntu). Udostępnia token KSeF i hasło SMTP.
 - **Klient KSeF**: integracja z KSeF API v2, logowanie tokenem, pobieranie paczek faktur za zakres dat. Przy zmianie środowiska zmienia się tylko adres bazowy.
 - **Parser FA(3)**: z XML wyciąga numer KSeF, NIP sprzedawcy, NIP nabywcy, datę wystawienia, termin płatności (opcjonalny), kwotę brutto, walutę oraz oznaczenie zapłaty z bloku `Platnosc` (opcjonalne). Nie zapisuje pliku XML.
@@ -66,7 +70,8 @@ Zasady:
 - Faktura jest zgłaszana w powiadomieniu co najwyżej raz. Znacznik „powiadomiono” ustawiany po udanej wysyłce.
 - Nieudany przebieg nie przesuwa daty ostatniego sukcesu.
 - Zakres pierwszego importu bierze datę startową z konfiguracji; kolejne przebiegi biorą datę ostatniego sukcesu.
-- Nazwa pola z oznaczeniem zapłaty w FA(3) i jego wartości nie są jeszcze potwierdzone. Należy je sprawdzić w XSD KSeF przed implementacją parsera.
+- Oznaczenie zapłaty w FA(3): element `Fa/Platnosc/Zaplacono` o wartości `1` (typ `TWybor1`), opcjonalnie z `Fa/Platnosc/DataZaplaty`. Źródło: XSD FA(3) (zob. Further Notes).
+- Termin płatności pochodzi z XML: `Fa/Platnosc/TerminPlatnosci/Termin` (opcjonalny, może wystąpić do 100 razy). Metadane faktury z API (`InvoiceMetadata`) nie zawierają terminu ani oznaczenia zapłaty.
 
 Seam testowy: jeden, na poziomie serwisu importu. Zależności zewnętrzne (klient KSeF, wysyłka mail, zegar) są wstrzyknięte jako interfejsy. Historia korzysta z prawdziwej, tymczasowej bazy SQLite. Nie ma istniejącego kodu, więc nie ma wcześniejszych wzorców testowych w repo; projekt powinien ustalić standard przy starcie.
 
@@ -106,6 +111,21 @@ Brak testów na prawdziwym KSeF i SMTP w CI. Testy integracyjne z środowiskiem 
 ## Further Notes
 
 - Tryby powiadomień (`PER_INVOICE`/`DAILY_DIGEST`) zostały porzucone. Obowiązuje jeden zbiorczy mail na przebieg, co najwyżej jeden na dobę, bez maila przy braku nowych faktur do zapłaty.
-- **Fakt do zweryfikowania**: nazwa pola oznaczenia zapłaty w bloku `Platnosc` w FA(3) i jego wartości (XSD KSeF).
-- **Fakt do zweryfikowania**: szczegóły uwierzytelniania tokenem w KSeF API v2 (sesja, szyfrowanie). Nie były badane w rozmowie.
+- **Zweryfikowano (issue #3, źródła: repozytorium CIRFMF/ksef-api, XSD FA(3) `schemat_FA(3)_v1-0E.xsd`)**:
+  - Oznaczenie zapłaty: `Fa/Platnosc/Zaplacono` = `1` (zapłacono). Obok może być `Fa/Platnosc/DataZaplaty`. Blok `Platnosc` jest opcjonalny.
+  - Płatność częściowa: `Fa/Platnosc/ZnacznikZaplatyCzesciowej` (`1` = w części, `2` = w całości w ratach, ostatnia płatność jest końcowa), z `ZaplataCzesciowa`. Faktura z płatnością częściową jest traktowana jako nieopłacona.
+  - Termin: `Fa/Platnosc/TerminPlatnosci/Termin` (typ data). Metadane API tego nie zawierają.
+  - Środowisko TEST: `https://api-test.ksef.mf.gov.pl/v2`. Środowiska DEMO i PROD mają inne hosty (`api-demo`, `api`), tylko zmienia się adres bazowy.
+  - Uwierzytelnianie tokenem KSeF:
+    1. `POST /auth/challenge` zwraca `challenge` i `timestamp` (ważność 10 minut).
+    2. Szyfrowanie: ciąg `{tokenKSeF}|{timestampMs}` szyfrowany RSA-OAEP (SHA-256, MGF1 SHA-256) kluczem publicznym KSeF o `usage` = `KsefTokenEncryption`, wynik Base64.
+    3. `POST /auth/ksef-token` z zaszyfrowanym tokenem, challenge i kontekstem (NIP). Odpowiedź: `authenticationToken` i `referenceNumber`.
+    4. `GET /auth/{referenceNumber}` z nagłówkiem `Authorization: Bearer <authenticationToken>`, aż status będzie sukcesem. Na TEST status może długo zostawać „w toku”.
+    5. `POST /auth/token/redeem` (jednorazowo, z `authenticationToken`) zwraca `accessToken` (JWT, krótki) i `refreshToken` (do 7 dni).
+    6. Odświeżanie: `POST /auth/token/refresh` z `refreshToken` w nagłówku Bearer.
+  - Sesja interaktywna (do wysyłki faktur, do późniejszej decyzji): klucz AES-256 i IV 128 bitów, szyfrowanie AES-256-CBC z PKCS#7, klucz szyfrowany RSA-OAEP kluczem `SymmetricKeyEncryption`. Pobieranie faktur (MVP) idzie przez eksport z szyfrowaniem paczek; szczegóły do ustalenia przy implementacji klienta.
+- **Nowe założenia (do decyzji właściciela)**:
+  1. Płatność częściowa (`ZnacznikZaplatyCzesciowej` = `1` lub `2`) nie oznacza faktury jako opłaconej. Tylko `Zaplacono` = `1` ją oznacza.
+  2. Gdy w fakturze jest wiele `TerminPlatnosci`, parser bierze najwcześniejszy `Termin`.
+  3. Ścieżki i zachowanie z dokumentacji są zgodne z OpenAPI TEST, ale nie zostały sprawdzone na żywym środowisku. Wymaga ręcznego testu z tokenem testowym (open-items).
 - Tracker zadań nie jest skonfigurowany w repo. Specyfikacja zapisana lokalnie. Aby publikować do trackera, uruchom `/setup-matt-pocock-skills`.
