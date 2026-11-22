@@ -19,3 +19,10 @@ Domyślne etykiety: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 ### Domain docs
 
 Single-context: `GLOSSARY.md` i `docs/adr/` w korzeniu repo. See `docs/agents/domain.md`.
+
+### Otwarte tematy
+
+Tematy wymagające decyzji właściciela albo ręcznego sprawdzenia (np. na Windows) zapisuj w `docs/open-items.md`:
+- dopisuj każdą nową pozycję w momencie, gdy ją znajdziesz, z kontekstem i źródłem (plik lub PR),
+- aktualizuj istniejące pozycje po każdej zmianie (np. zaznacz `[x]` po rozstrzygnięciu),
+- nie zamykaj pozycji bez potwierdzenia właściciela.
