@@ -54,7 +54,7 @@ class ImportCommand(
             exitCode = EXIT_CONFIG_ERROR
             return
         }
-        // Throwable, nie RuntimeException: każda nieobsłużona awaria w CLI ma dać kod 4, także Error.
+        // Catch Throwable, not RuntimeException, so any unhandled failure, including Error, maps to exit code 4.
         val token = try {
             secrets.read(SecretName.KSEF_TOKEN)
         } catch (e: SecretStoreException) {

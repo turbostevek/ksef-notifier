@@ -60,10 +60,10 @@ class KsefClient(
         ).let { readJson<AuthInitResponse>(it, OperationDescription.LOGIN) }
 
         val authToken = authInit.authenticationToken.token
-        awaitStatus(OperationDescription.LOGIN, { it.status }) {
+        awaitStatus(OperationDescription.LOGIN, { it.status }) { operation ->
             readJson<AuthStatusResponse>(
-                get("/auth/${authInit.referenceNumber}", bearer = authToken, operation = OperationDescription.AUTH_STATUS),
-                OperationDescription.AUTH_STATUS,
+                get("/auth/${authInit.referenceNumber}", bearer = authToken, operation = operation),
+                operation,
             )
         }
 
@@ -134,13 +134,13 @@ class KsefClient(
             .let { readJson<ExportResponse>(it, OperationDescription.EXPORT) }
             .referenceNumber
 
-        val status = awaitStatus(OperationDescription.EXPORT, { it.status }) {
+        val status = awaitStatus(OperationDescription.EXPORT, { it.status }) { operation ->
             readJson<ExportStatusResponse>(
-                get("/invoices/exports/$reference", bearer = accessToken.value, operation = OperationDescription.EXPORT_STATUS),
-                OperationDescription.EXPORT_STATUS,
+                get("/invoices/exports/$reference", bearer = accessToken.value, operation = operation),
+                operation,
             )
         }
-        val pkg = status.`package` ?: throw KsefException("${OperationDescription.EXPORT.label} zakończony bez paczki")
+        val pkg = status.`package` ?: throw ksefError(OperationDescription.EXPORT, "zakończony bez paczki")
 
         val encrypted = ByteArrayOutputStream()
         pkg.parts.sortedBy { it.ordinalNumber }.forEach { part ->
@@ -180,17 +180,17 @@ class KsefClient(
         return CertificateWithId(x509, certificate.publicKeyId)
     }
 
-    private fun <T> awaitStatus(operation: OperationDescription, statusOf: (T) -> StatusInfo, poll: () -> T): T {
+    private fun <T> awaitStatus(operation: OperationDescription, statusOf: (T) -> StatusInfo, poll: (OperationDescription) -> T): T {
         repeat(MAX_POLLS) {
-            val result = poll()
+            val result = poll(operation)
             val status = statusOf(result)
             when (status.code) {
                 STATUS_SUCCESS -> return result
                 STATUS_IN_PROGRESS -> sleepBetweenPolls(operation)
-                else -> throw KsefException("${operation.label}: KSeF zwrócił status ${status.code} (${status.description})")
+                else -> throw ksefError(operation, "KSeF zwrócił status ${status.code} (${status.description})")
             }
         }
-        throw KsefException("${operation.label}: przekroczono czas oczekiwania na odpowiedź KSeF")
+        throw ksefError(operation, "przekroczono czas oczekiwania na odpowiedź KSeF")
     }
 
     private fun sleepBetweenPolls(operation: OperationDescription) {
@@ -198,7 +198,7 @@ class KsefClient(
             Thread.sleep(pollInterval.toMillis())
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw KsefException("${operation.label}: przerwano oczekiwanie na KSeF", e)
+            throw ksefError(operation, "przerwano oczekiwanie na KSeF", e)
         }
     }
 
@@ -231,15 +231,15 @@ class KsefClient(
         try {
             http.send(request, HttpResponse.BodyHandlers.ofByteArray())
         } catch (e: IOException) {
-            throw KsefException("${operation.label}: brak połączenia z KSeF (${e.message})", e)
+            throw ksefError(operation, "brak połączenia z KSeF (${e.message})", e)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            throw KsefException("${operation.label}: przerwano oczekiwanie na KSeF", e)
+            throw ksefError(operation, "przerwano oczekiwanie na KSeF", e)
         }
 
     private fun requireSuccess(response: HttpResponse<ByteArray>, operation: OperationDescription) {
         if (response.statusCode() !in 200..299) {
-            throw KsefException("${operation.label}: KSeF zwrócił HTTP ${response.statusCode()}${describeError(response.body())}")
+            throw ksefError(operation, "KSeF zwrócił HTTP ${response.statusCode()}${describeError(response.body())}")
         }
     }
 
@@ -256,19 +256,22 @@ class KsefClient(
         try {
             mapper.readValue(response.body(), T::class.java)
         } catch (e: Exception) {
-            throw KsefException("${operation.label}: nieoczekiwana odpowiedź KSeF", e)
+            throw ksefError(operation, "nieoczekiwana odpowiedź KSeF", e)
         }
 
     private inline fun <T> cryptoStep(operation: OperationDescription, block: () -> T): T =
         try {
             block()
         } catch (e: GeneralSecurityException) {
-            throw KsefException("${operation.label}: błąd kryptograficzny (${e.message})", e)
+            throw ksefError(operation, "błąd kryptograficzny (${e.message})", e)
         } catch (e: IOException) {
-            throw KsefException("${operation.label}: nieprawidłowe dane paczki (${e.message})", e)
+            throw ksefError(operation, "nieprawidłowe dane paczki (${e.message})", e)
         } catch (e: IllegalArgumentException) {
-            throw KsefException("${operation.label}: nieprawidłowe dane KSeF (${e.message})", e)
+            throw ksefError(operation, "nieprawidłowe dane KSeF (${e.message})", e)
         }
+
+    private fun ksefError(operation: OperationDescription, detail: String, cause: Throwable? = null): KsefException =
+        KsefException("${operation.label}: $detail", cause)
 
     private fun parseKsefDate(value: String): Instant =
         try {
