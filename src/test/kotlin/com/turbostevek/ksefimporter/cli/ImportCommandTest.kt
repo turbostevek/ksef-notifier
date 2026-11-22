@@ -3,6 +3,7 @@ package com.turbostevek.ksefimporter.cli
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
+import com.turbostevek.ksefimporter.validConfigYaml
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -96,6 +97,32 @@ class ImportCommandTest {
         assertTrue(errBuffer.toString(Charsets.UTF_8).contains("magazyn"))
     }
 
+    @Test
+    fun `config podany ze spacja zamiast znaku równości konczy sie kodem 2`() {
+        val config = writeConfig(VALID_YAML)
+
+        val command = ImportCommand(FakeSecretStore())
+        command.run(DefaultApplicationArguments("import", "--config", config.toString()))
+
+        assertEquals(2, command.exitCode)
+    }
+
+    @Test
+    fun `config bez wartosci konczy sie kodem 2`() {
+        val command = ImportCommand(FakeSecretStore())
+        command.run(DefaultApplicationArguments("import", "--config"))
+
+        assertEquals(2, command.exitCode)
+    }
+
+    @Test
+    fun `config z pusta wartoscia po znaku równości konczy sie kodem 2`() {
+        val command = ImportCommand(FakeSecretStore())
+        command.run(DefaultApplicationArguments("import", "--config="))
+
+        assertEquals(2, command.exitCode)
+    }
+
     private fun writeConfig(yaml: String): Path =
         dir.resolve("ksef-importer.yml").also { Files.writeString(it, yaml) }
 
@@ -111,13 +138,6 @@ class ImportCommandTest {
 
     private companion object {
         const val SECRET_TOKEN = "super-tajny-token-123"
-        val VALID_YAML = """
-            importTime: "07:30"
-            startDate: 2026-01-01
-            recipientEmail: zona@example.com
-            smtp:
-              host: smtp.example.com
-              from: ksef@example.com
-        """.trimIndent()
+        val VALID_YAML = validConfigYaml
     }
 }

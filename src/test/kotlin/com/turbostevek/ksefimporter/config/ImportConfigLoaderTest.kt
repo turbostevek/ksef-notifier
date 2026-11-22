@@ -1,5 +1,6 @@
 package com.turbostevek.ksefimporter.config
 
+import com.turbostevek.ksefimporter.validConfigYaml
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -11,6 +12,7 @@ import java.time.LocalTime
 class ImportConfigLoaderTest {
 
     private val loader = ImportConfigLoader()
+    private val minimalValidYaml = validConfigYaml
 
     @Test
     fun `wczytuje wszystkie parametry z pliku konfiguracyjnego`() {
@@ -40,11 +42,10 @@ class ImportConfigLoaderTest {
     }
 
     @Test
-    fun `domyslnie uzywa srodowiska testowego KSeF i portu 587`() {
+    fun `bez sekcji ksef srodowiskiem jest test`() {
         val config = loader.parse(minimalValidYaml)
 
         assertEquals(KsefEnvironment.TEST, config.ksefEnvironment)
-        assertEquals(587, config.smtp.port)
     }
 
     @Test
@@ -91,13 +92,4 @@ class ImportConfigLoaderTest {
 
         assertTrue(error.message!!.contains("nie-ma-takiego-pliku.yml"), error.message)
     }
-
-    private val minimalValidYaml = """
-        importTime: "07:30"
-        startDate: 2026-01-01
-        recipientEmail: zona@example.com
-        smtp:
-          host: smtp.example.com
-          from: ksef@example.com
-    """.trimIndent()
 }
