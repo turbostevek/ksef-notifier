@@ -45,3 +45,7 @@ _Avoid_: Alert, przypomnienie, mail na fakturę
 - Podmiot ma jeden Token KSeF.
 - Import tworzy wpisy w Historii dla Faktur zakupowych.
 - Nowe Faktury do zapłaty są zgłaszane w jednym Powiadomieniu. Faktura opłacona przy wystawieniu nie jest zgłaszana.
+
+## Język w kodzie
+
+Kod źródłowy, identyfikatory (klasy, metody, zmienne, nazwy poleceń CLI), komentarze techniczne i nazwy plików są po angielsku. Nazwy testów, komunikaty dla użytkownika i README są po polsku, a terminy z tego glosariusza używane w tych tekstach mają polską formę.

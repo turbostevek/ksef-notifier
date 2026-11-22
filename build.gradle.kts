@@ -24,6 +24,7 @@ dependencies {
 	implementation("tools.jackson.dataformat:jackson-dataformat-yaml")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("net.java.dev.jna:jna:5.17.0")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
