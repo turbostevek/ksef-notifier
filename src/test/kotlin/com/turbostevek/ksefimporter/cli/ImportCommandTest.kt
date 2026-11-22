@@ -1,6 +1,6 @@
 package com.turbostevek.ksefimporter.cli
 
-import com.turbostevek.ksefimporter.config.ImportConfigLoader
+import com.turbostevek.ksefimporter.validConfigYaml
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.AfterEach
@@ -61,17 +61,36 @@ class ImportCommandTest {
         assertEquals(2, command.exitCode)
     }
 
+    @Test
+    fun `config podany ze spacja zamiast znaku równości konczy sie kodem 2`() {
+        val config = writeConfig(VALID_YAML)
+
+        val command = ImportCommand()
+        command.run(DefaultApplicationArguments("import", "--config", config.toString()))
+
+        assertEquals(2, command.exitCode)
+    }
+
+    @Test
+    fun `config bez wartosci konczy sie kodem 2`() {
+        val command = ImportCommand()
+        command.run(DefaultApplicationArguments("import", "--config"))
+
+        assertEquals(2, command.exitCode)
+    }
+
+    @Test
+    fun `config z pusta wartoscia po znaku równości konczy sie kodem 2`() {
+        val command = ImportCommand()
+        command.run(DefaultApplicationArguments("import", "--config="))
+
+        assertEquals(2, command.exitCode)
+    }
+
     private fun writeConfig(yaml: String): Path =
         dir.resolve("ksef-importer.yml").also { Files.writeString(it, yaml) }
 
     private companion object {
-        val VALID_YAML = """
-            importTime: "07:30"
-            startDate: 2026-01-01
-            recipientEmail: zona@example.com
-            smtp:
-              host: smtp.example.com
-              from: ksef@example.com
-        """.trimIndent()
+        val VALID_YAML = validConfigYaml
     }
 }

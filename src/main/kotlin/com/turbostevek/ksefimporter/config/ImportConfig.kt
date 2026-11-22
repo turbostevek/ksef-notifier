@@ -53,14 +53,19 @@ class ImportConfigLoader {
     fun parse(yaml: String): ImportConfig {
         val file = parser.parse(yaml)
         val smtp = file.smtp
+        val missing = mutableListOf<String>()
 
-        val missing = buildList {
-            if (file.importTime.isNullOrBlank()) add("importTime")
-            if (file.startDate.isNullOrBlank()) add("startDate")
-            if (file.recipientEmail.isNullOrBlank()) add("recipientEmail")
-            if (smtp?.host.isNullOrBlank()) add("smtp.host")
-            if (smtp?.from.isNullOrBlank()) add("smtp.from")
-        }
+        fun required(name: String, value: String?): String =
+            value?.takeIf { it.isNotBlank() } ?: run {
+                missing += name
+                ""
+            }
+
+        val importTime = required("importTime", file.importTime)
+        val startDate = required("startDate", file.startDate)
+        val recipientEmail = required("recipientEmail", file.recipientEmail)
+        val host = required("smtp.host", smtp?.host)
+        val from = required("smtp.from", smtp?.from)
         if (missing.isNotEmpty()) {
             throw ConfigException("Brak wymaganych parametrów w konfiguracji: ${missing.joinToString(", ")}")
         }
@@ -71,15 +76,15 @@ class ImportConfigLoader {
         } ?: KsefEnvironment.TEST
 
         return ImportConfig(
-            importTime = parseOrFail("importTime", file.importTime!!) { LocalTime.parse(it) },
-            startDate = parseOrFail("startDate", file.startDate!!) { LocalDate.parse(it) },
-            recipientEmail = file.recipientEmail!!,
+            importTime = parseOrFail("importTime", importTime) { LocalTime.parse(it) },
+            startDate = parseOrFail("startDate", startDate) { LocalDate.parse(it) },
+            recipientEmail = recipientEmail,
             ksefEnvironment = environment,
             smtp = SmtpSettings(
-                host = smtp!!.host!!,
-                port = smtp.port ?: DEFAULT_SMTP_PORT,
-                username = smtp.username,
-                from = smtp.from!!,
+                host = host,
+                port = smtp?.port ?: DEFAULT_SMTP_PORT,
+                username = smtp?.username,
+                from = from,
             ),
         )
     }
