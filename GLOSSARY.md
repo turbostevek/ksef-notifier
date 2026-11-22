@@ -1,0 +1,47 @@
+# Ksef Importer
+
+Aplikacja lokalna, która raz dziennie pobiera z KSeF faktury zakupowe podmiotu i informuje użytkownika o nowych fakturach do zapłaty. Nie przechowuje plików faktur ani nie śledzi stanu płatności.
+
+## Język
+
+**Podmiot**:
+Firma identyfikowana przez NIP, w imieniu której działa aplikacja. Jedna instancja aplikacji obsługuje jeden podmiot.
+_Avoid_: Firma, klient, tenant
+
+**Token KSeF**:
+Poświadczenie służące do połączenia z KSeF w imieniu podmiotu. Przechowywany w systemowym magazynie sekretów, nigdy w pliku konfiguracyjnym.
+_Avoid_: Klucz API, hasło
+
+**Faktura KSeF**:
+Faktura zarejestrowana w KSeF i identyfikowana numerem KSeF.
+_Avoid_: E-faktura, dokument
+
+**Faktura zakupowa**:
+Faktura KSeF, w której nabywcą jest podmiot.
+_Avoid_: Faktura kosztowa, faktura przychodząca
+
+**Faktura do zapłaty**:
+Faktura zakupowa zaimportowana przez aplikację, która nie jest oznaczona na fakturze jako już opłacona. Oznaczenie odczytywane jest z XML w chwili importu; późniejszych zmian aplikacja nie śledzi.
+_Avoid_: Nieopłacona, zaległa, należność
+
+**Faktura opłacona przy wystawieniu**:
+Faktura zakupowa oznaczona na fakturze jako już opłacona (np. zakup w sklepie internetowym z przedpłatą). Trafia do Historii, ale nie generuje Powiadomienia.
+_Avoid_: Opłacona, zamknięta
+
+**Import**:
+Pobranie z KSeF paczki faktur za wskazany zakres dat i zapisanie informacji o nich w historii. Pliki faktur nie są zapisywane.
+_Avoid_: Synchronizacja, pobranie
+
+**Historia**:
+Lokalny zapis zaimportowanych faktur wraz z informacją, czy dla każdej z nich wysłano powiadomienie.
+_Avoid_: Archiwum, baza faktur
+
+**Powiadomienie**:
+Zbiorcza wiadomość email wysyłana po Imporcie, zawierająca nowe Faktury do zapłaty. Jedno Powiadomienie na uruchomienie, co najwyżej jedno na dobę. Brak nowych faktur do zapłaty oznacza brak Powiadomienia.
+_Avoid_: Alert, przypomnienie, mail na fakturę
+
+## Relacje
+
+- Podmiot ma jeden Token KSeF.
+- Import tworzy wpisy w Historii dla Faktur zakupowych.
+- Nowe Faktury do zapłaty są zgłaszane w jednym Powiadomieniu. Faktura opłacona przy wystawieniu nie jest zgłaszana.
