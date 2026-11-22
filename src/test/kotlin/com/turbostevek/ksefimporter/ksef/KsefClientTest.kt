@@ -67,7 +67,7 @@ class KsefClientTest {
     }
 
     @Test
-    fun `loguje token KSeF i pobiera fakture z paczki scalonej z dwoch czesci`() {
+    fun `loguje token KSeF i pobiera fakture z paczki scalonej z dwoch czesci, pomijajac metadane paczki`() {
         val client = client()
 
         val accessToken = client.login(TOKEN, NIP)
@@ -140,7 +140,12 @@ class KsefClientTest {
     }
 
     private val parts: List<ByteArray> by lazy {
-        val encrypted = encryptAes(zipOf("faktura.xml" to INVOICE_XML.toByteArray(Charsets.UTF_8)))
+        val encrypted = encryptAes(
+            zipOf(
+                "faktura.xml" to INVOICE_XML.toByteArray(Charsets.UTF_8),
+                "_metadata.json" to "{}".toByteArray(Charsets.UTF_8),
+            ),
+        )
         val half = encrypted.size / 2
         listOf(encrypted.copyOfRange(0, half), encrypted.copyOfRange(half, encrypted.size))
     }
