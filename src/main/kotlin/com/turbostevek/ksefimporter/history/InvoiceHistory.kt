@@ -35,17 +35,12 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         connection.autoCommit = false
         try {
             var added = 0
-            connection.prepareStatement(INSERT_INVOICE).use { statement ->
+            connection.prepareStatement(insertInvoiceSql()).use { statement ->
                 invoices.forEach { invoice ->
-                    statement.setString(1, invoice.ksefNumber)
-                    statement.setString(2, invoice.sellerNip)
-                    statement.setString(3, invoice.buyerNip)
-                    statement.setString(4, invoice.issueDate.toString())
-                    statement.setString(5, invoice.dueDate?.toString())
-                    statement.setString(6, invoice.grossAmount.toPlainString())
-                    statement.setString(7, invoice.currency)
-                    statement.setInt(8, if (invoice.paidAtIssue) 1 else 0)
-                    statement.setString(9, importedAt.toString())
+                    val row = invoice.toRow(importedAt)
+                    INSERT_COLUMNS.forEachIndexed { index, column ->
+                        statement.setObject(index + 1, row.getValue(column))
+                    }
                     added += statement.executeUpdate()
                 }
             }
@@ -73,6 +68,23 @@ class InvoiceHistory(path: Path) : AutoCloseable {
     override fun close() {
         connection.close()
     }
+
+    /** Column values by column name, so the INSERT binds by name and not by position. */
+    private fun PurchaseInvoice.toRow(importedAt: Instant): Map<String, Any?> = mapOf(
+        "ksef_number" to ksefNumber,
+        "seller_nip" to sellerNip,
+        "buyer_nip" to buyerNip,
+        "issue_date" to issueDate.toString(),
+        "due_date" to dueDate?.toString(),
+        "gross_amount" to grossAmount.toPlainString(),
+        "currency" to currency,
+        "paid_at_issue" to if (paidAtIssue) 1 else 0,
+        "imported_at" to importedAt.toString(),
+    )
+
+    private fun insertInvoiceSql(): String =
+        "INSERT INTO invoice_history (${INSERT_COLUMNS.joinToString()}) " +
+            "VALUES (${INSERT_COLUMNS.joinToString { "?" }}) ON CONFLICT (ksef_number) DO NOTHING"
 
     private fun java.sql.ResultSet.toInvoice() = PurchaseInvoice(
         ksefNumber = getString("ksef_number"),
@@ -106,12 +118,10 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                 last_imported_to TEXT NOT NULL
             )
         """
-        const val INSERT_INVOICE = """
-            INSERT INTO invoice_history
-                (ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue, imported_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (ksef_number) DO NOTHING
-        """
+        val INSERT_COLUMNS = listOf(
+            "ksef_number", "seller_nip", "buyer_nip", "issue_date", "due_date",
+            "gross_amount", "currency", "paid_at_issue", "imported_at",
+        )
         const val UPSERT_IMPORT_STATE = """
             INSERT INTO import_state (id, last_imported_to) VALUES (1, ?)
             ON CONFLICT (id) DO UPDATE SET last_imported_to = excluded.last_imported_to

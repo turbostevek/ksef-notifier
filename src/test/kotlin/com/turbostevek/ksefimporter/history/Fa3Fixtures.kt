@@ -2,10 +2,10 @@ package com.turbostevek.ksefimporter.history
 
 internal const val TEST_NIP = "9261051389"
 
-/** Minimal FA(3) invoice; [platnosc] is the inner content of the `Platnosc` element. */
+/** Minimal FA(3) invoice; [platnosc] is the inner content of the `Platnosc` element, `null` omits the element. */
 internal fun fa3Xml(
     buyerNip: String = TEST_NIP,
-    platnosc: String = "",
+    platnosc: String? = "",
     currency: String = "PLN",
     gross: String = "123.45",
 ): ByteArray = """
@@ -17,7 +17,7 @@ internal fun fa3Xml(
         <KodWaluty>$currency</KodWaluty>
         <P_1>2026-03-10</P_1>
         <P_15>$gross</P_15>
-        <Platnosc>$platnosc</Platnosc>
+        ${platnosc?.let { "<Platnosc>$it</Platnosc>" } ?: ""}
       </Fa>
     </Faktura>
 """.trimIndent().toByteArray(Charsets.UTF_8)

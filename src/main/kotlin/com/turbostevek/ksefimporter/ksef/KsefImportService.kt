@@ -4,7 +4,6 @@ import com.turbostevek.ksefimporter.config.ImportConfig
 import org.springframework.stereotype.Component
 import java.time.Instant
 
-/** Downloads the purchase invoice files from KSeF for the given time window. */
 interface InvoiceSource {
     fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile>
 }

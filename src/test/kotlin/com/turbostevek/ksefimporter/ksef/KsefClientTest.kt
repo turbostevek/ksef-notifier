@@ -76,7 +76,7 @@ class KsefClientTest {
 
         assertEquals("access-token", accessToken.value)
         assertEquals("$TOKEN|$TIMESTAMP_MS", receivedKsefToken)
-        assertEquals(listOf("faktura.xml"), invoices.map { it.name })
+        assertEquals(listOf("faktura"), invoices.map { it.ksefNumber })
         assertEquals(INVOICE_XML, String(invoices.single().xml, Charsets.UTF_8))
     }
 

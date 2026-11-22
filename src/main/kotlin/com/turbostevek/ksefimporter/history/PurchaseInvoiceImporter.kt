@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component
 import java.nio.file.Path
 import java.time.Instant
 
-data class ImportResult(val purchases: Int, val added: Int)
+data class ImportResult(val downloaded: Int, val added: Int)
 
 /**
  * Incremental import of purchase invoices into the local history. The first run starts at the configured start date,
@@ -21,12 +21,9 @@ class PurchaseInvoiceImporter(private val source: InvoiceSource) {
             val now = Instant.now()
             val from = history.lastSuccessfulImport() ?: config.importFrom()
             val purchases = source.download(config, token, from, now)
-                .map { Fa3InvoiceParser.parse(ksefNumberOf(it.name), it.xml) }
+                .map { Fa3InvoiceParser.parse(it.ksefNumber, it.xml) }
                 .filter { it.buyerNip == config.nip.value }
             val added = history.save(purchases, importedUpTo = now, importedAt = now)
-            ImportResult(purchases = purchases.size, added = added)
+            ImportResult(downloaded = purchases.size, added = added)
         }
-
-    /** KSeF names each invoice file `{ksefNumber}.xml` in the package. */
-    private fun ksefNumberOf(fileName: String): String = fileName.substringAfterLast('/').substringBeforeLast('.')
 }

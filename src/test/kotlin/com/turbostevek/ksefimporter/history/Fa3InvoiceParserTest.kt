@@ -18,12 +18,19 @@ class Fa3InvoiceParserTest {
 
         assertTrue(invoice.paidAtIssue)
         assertNull(invoice.dueDate)
-        assertEquals("brak terminu", invoice.dueDateLabel)
     }
 
     @Test
-    fun `faktura bez bloku platnosci nie jest oplacona i nie ma terminu`() {
+    fun `pusty blok platnosci nie jest oplacona i nie ma terminu`() {
         val invoice = parse(platnosc = "")
+
+        assertFalse(invoice.paidAtIssue)
+        assertNull(invoice.dueDate)
+    }
+
+    @Test
+    fun `faktura bez elementu platnosci nie jest oplacona i nie ma terminu`() {
+        val invoice = parse(platnosc = null)
 
         assertFalse(invoice.paidAtIssue)
         assertNull(invoice.dueDate)
@@ -37,7 +44,6 @@ class Fa3InvoiceParserTest {
         )
 
         assertEquals(LocalDate.of(2026, 4, 15), invoice.dueDate)
-        assertEquals("2026-04-15", invoice.dueDateLabel)
     }
 
     @Test
@@ -74,7 +80,7 @@ class Fa3InvoiceParserTest {
     }
 
     private fun parse(
-        platnosc: String = "",
+        platnosc: String? = "",
         currency: String = "PLN",
         gross: String = "123.45",
     ): PurchaseInvoice = Fa3InvoiceParser.parse(KSEF_NUMBER, fa3Xml(platnosc = platnosc, currency = currency, gross = gross))

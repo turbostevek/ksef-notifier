@@ -21,7 +21,7 @@ class PurchaseInvoiceImporterTest {
 
     private val config: ImportConfig = ImportConfigLoader().parse(validConfigYaml)
     private val token = KsefToken("token")
-    private val historyPath: Path get() = dir.resolve("historia.db")
+    private val historyPath: Path get() = dir.resolve("invoice-history.db")
     private val source = FakeInvoiceSource()
     private val importer = PurchaseInvoiceImporter(source)
 
@@ -52,7 +52,7 @@ class PurchaseInvoiceImporterTest {
 
         val result = importer.importInvoices(config, token, historyPath)
 
-        assertEquals(1, result.purchases)
+        assertEquals(1, result.downloaded)
         assertEquals(1, result.added)
         assertEquals(listOf("PURCHASE"), InvoiceHistory(historyPath).use { it.findAll().map { invoice -> invoice.ksefNumber } })
     }
@@ -80,7 +80,7 @@ class PurchaseInvoiceImporterTest {
     }
 
     private fun invoiceFile(ksefNumber: String, buyerNip: String): InvoiceFile =
-        InvoiceFile("$ksefNumber.xml", fa3Xml(buyerNip = buyerNip))
+        InvoiceFile(ksefNumber, fa3Xml(buyerNip = buyerNip))
 
     private class FakeInvoiceSource : InvoiceSource {
         var files: List<InvoiceFile> = emptyList()

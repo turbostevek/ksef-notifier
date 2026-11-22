@@ -18,7 +18,7 @@ class InvoiceHistoryTest {
 
     @Test
     fun `ponowny zapis tej samej faktury nie tworzy duplikatu`() {
-        InvoiceHistory(dir.resolve("historia.db")).use { history ->
+        InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
             assertEquals(1, history.save(listOf(invoice("A")), importedUpTo, importedUpTo))
             assertEquals(0, history.save(listOf(invoice("A")), importedUpTo, importedUpTo))
 
@@ -28,7 +28,7 @@ class InvoiceHistoryTest {
 
     @Test
     fun `po zapisie importu granica okna jest zapamietana, a przed pierwszym importem brak`() {
-        InvoiceHistory(dir.resolve("historia.db")).use { history ->
+        InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
             assertNull(history.lastSuccessfulImport())
 
             history.save(emptyList(), importedUpTo, importedUpTo)
@@ -38,19 +38,17 @@ class InvoiceHistoryTest {
     }
 
     @Test
-    fun `faktura bez terminu zapisuje brak terminu i odczytuje etykiete`() {
-        InvoiceHistory(dir.resolve("historia.db")).use { history ->
+    fun `faktura bez terminu zapisuje termin jako NULL`() {
+        InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
             history.save(listOf(invoice("A", dueDate = null)), importedUpTo, importedUpTo)
 
-            val stored = history.findAll().single()
-            assertNull(stored.dueDate)
-            assertEquals("brak terminu", stored.dueDateLabel)
+            assertNull(history.findAll().single().dueDate)
         }
     }
 
     @Test
     fun `zapisuje walute, kwote brutto i flage oplacenia bez zaokraglen`() {
-        InvoiceHistory(dir.resolve("historia.db")).use { history ->
+        InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
             history.save(listOf(invoice("A", gross = "1234.50", currency = "EUR", paid = true)), importedUpTo, importedUpTo)
 
             val stored = history.findAll().single()

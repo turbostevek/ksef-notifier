@@ -74,7 +74,7 @@ class ImportCommand(
             val result = importer.importInvoices(config, KsefToken(token), path.resolveSibling(HISTORY_DB_FILE))
             log.info(
                 "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}), dodano do historii: {}. Faktury nie zostały zapisane na dysku.",
-                result.purchases,
+                result.downloaded,
                 config.ksefEnvironment.value,
                 result.added,
             )
@@ -115,7 +115,7 @@ class ImportCommand(
         const val CHECK_TOKEN_COMMAND = "check-token"
         const val CONFIG_OPTION = "config"
         const val DEFAULT_CONFIG_FILE = "ksef-importer.yml"
-        const val HISTORY_DB_FILE = "historia.db"
+        const val HISTORY_DB_FILE = "invoice-history.db"
         const val EXIT_OK = 0
         const val EXIT_CONFIG_ERROR = 1
         const val EXIT_USAGE = 2

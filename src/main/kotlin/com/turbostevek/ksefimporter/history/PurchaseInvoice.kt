@@ -13,11 +13,4 @@ data class PurchaseInvoice(
     val grossAmount: BigDecimal,
     val currency: String,
     val paidAtIssue: Boolean,
-) {
-    val dueDateLabel: String
-        get() = dueDate?.toString() ?: NO_DUE_DATE_LABEL
-
-    companion object {
-        const val NO_DUE_DATE_LABEL = "brak terminu"
-    }
-}
+)
