@@ -70,10 +70,10 @@ class KsefClientTest {
     fun `loguje token KSeF i pobiera fakture z paczki scalonej z dwoch czesci, pomijajac metadane paczki`() {
         val client = client()
 
-        val accessToken = client.login(TOKEN, NIP)
+        val accessToken = client.login(KsefToken(TOKEN), NIP)
         val invoices = client.downloadInvoices(accessToken, Instant.now().minusSeconds(86_400), Instant.now())
 
-        assertEquals("access-token", accessToken)
+        assertEquals("access-token", accessToken.value)
         assertEquals("$TOKEN|$TIMESTAMP_MS", receivedKsefToken)
         assertEquals(listOf("faktura.xml"), invoices.map { it.name })
         assertEquals(INVOICE_XML, String(invoices.single().xml, Charsets.UTF_8))
@@ -85,7 +85,7 @@ class KsefClientTest {
 
         val client = client()
 
-        assertThrows<KsefException> { client.login(TOKEN, NIP) }
+        assertThrows<KsefException> { client.login(KsefToken(TOKEN), NIP) }
     }
 
     @Test
@@ -95,7 +95,7 @@ class KsefClientTest {
         val client = client()
 
         assertThrows<KsefException> {
-            client.downloadInvoices("access-token", Instant.now().minusSeconds(86_400), Instant.now())
+            client.downloadInvoices(AccessToken("access-token"), Instant.now().minusSeconds(86_400), Instant.now())
         }
     }
 

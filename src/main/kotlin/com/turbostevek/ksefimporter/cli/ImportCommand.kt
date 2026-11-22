@@ -2,8 +2,9 @@ package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ConfigException
 import com.turbostevek.ksefimporter.config.ImportConfigLoader
-import com.turbostevek.ksefimporter.ksef.KsefClientFactory
 import com.turbostevek.ksefimporter.ksef.KsefException
+import com.turbostevek.ksefimporter.ksef.KsefImportService
+import com.turbostevek.ksefimporter.ksef.KsefToken
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
@@ -13,13 +14,11 @@ import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.ExitCodeGenerator
 import org.springframework.stereotype.Component
 import java.nio.file.Path
-import java.time.Instant
-import java.time.ZoneId
 
 @Component
 class ImportCommand(
     private val secrets: SecretStore,
-    private val clientFactory: KsefClientFactory,
+    private val importService: KsefImportService,
 ) : ApplicationRunner, ExitCodeGenerator {
 
     private val loader = ImportConfigLoader()
@@ -68,10 +67,7 @@ class ImportCommand(
             return
         }
         try {
-            val client = clientFactory.create(config.ksefEnvironment.apiBaseUrl)
-            val accessToken = client.login(token, config.nip)
-            val from = config.startDate.atStartOfDay(POLISH_ZONE).toInstant()
-            val invoices = client.downloadInvoices(accessToken, from, Instant.now())
+            val invoices = importService.downloadPurchaseInvoices(config, KsefToken(token))
             log.info(
                 "Pobrano {} faktur zakupowych z KSeF (środowisko KSeF: {}). Faktury nie zostały zapisane na dysku.",
                 invoices.size,
@@ -82,6 +78,10 @@ class ImportCommand(
             log.error("Błąd KSeF: {}", e.message)
             System.err.println("Błąd KSeF: ${e.message}")
             exitCode = EXIT_KSEF_ERROR
+        } catch (e: RuntimeException) {
+            log.error("Nieoczekiwany błąd importu", e)
+            System.err.println("Nieoczekiwany błąd importu: ${e.message}")
+            exitCode = EXIT_UNEXPECTED_ERROR
         }
     }
 
@@ -106,11 +106,11 @@ class ImportCommand(
         const val CHECK_TOKEN_COMMAND = "check-token"
         const val CONFIG_OPTION = "config"
         const val DEFAULT_CONFIG_FILE = "ksef-importer.yml"
-        val POLISH_ZONE: ZoneId = ZoneId.of("Europe/Warsaw")
         const val EXIT_OK = 0
         const val EXIT_CONFIG_ERROR = 1
         const val EXIT_USAGE = 2
         const val EXIT_KSEF_ERROR = 3
+        const val EXIT_UNEXPECTED_ERROR = 4
         val MISSING_TOKEN_MESSAGE = "Brak sekretu '${SecretName.KSEF_TOKEN.qualifiedName}' w systemowym magazynie sekretów. " +
             "Zapisz token KSeF pod tą nazwą."
     }

@@ -32,6 +32,7 @@ Kody wyjścia:
 - `1` – błąd konfiguracji (brak parametru, nieprawidłowa wartość, brak pliku) albo brak tokenu KSeF w magazynie sekretów; komunikat jest wypisywany na stderr
 - `2` – brak polecenia `import` lub `check-token`
 - `3` – błąd KSeF (token odrzucony lub wygasły, błąd eksportu, brak połączenia); komunikat jest logowany jako błąd i wypisywany na stderr
+- `4` – nieoczekiwany błąd podczas importu (np. błąd wewnętrzny); komunikat jest logowany wraz z przyczyną i wypisywany na stderr
 
 ## Token KSeF
 

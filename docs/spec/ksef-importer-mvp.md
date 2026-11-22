@@ -61,7 +61,7 @@ Moduły:
 - **Historia**: lokalna baza SQLite. Tabela faktur: numer KSeF (unikalny), dane z parsera, znacznik „opłacona przy wystawieniu”, znacznik „powiadomiono”, data importu. Tabela stanu importu: data ostatniego udanego importu.
 - **Powiadomienia**: wysyłka zbiorczego maila przez SMTP. Mail zawiera nowe faktury do zapłaty z danego przebiegu. Nie jest wysyłany, gdy takich faktur nie ma.
 - **Serwis importu** (główny moduł): dla danego zakresu pobiera paczki z klienta KSeF, parsuje faktury, zapisuje nowe do Historii (pomijając istniejące po numerze KSeF), wysyła jedno zbiorcze powiadomienie o nowych fakturach do zapłaty, a następnie oznacza je jako powiadomione i aktualizuje datę ostatniego sukcesu dopiero po pełnym przebiegu.
-- **Punkt wejścia CLI**: jedno polecenie uruchamiające import; kod zwraca niezerowy status przy błędzie.
+- **Punkt wejścia CLI**: jedno polecenie uruchamiające import; kod zwraca niezerowy status przy błędzie. Kody wyjścia: `0` import zakończony, `1` błąd konfiguracji lub brak tokenu, `2` błędne użycie, `3` błąd KSeF, `4` nieoczekiwany błąd. Po udanym imporcie logowana jest liczba pobranych faktur zakupowych (tylko XML, bez zapisu na dysku). Ta sama lista jest w [README](../../README.md).
 
 Zasady:
 - Aplikacja odczytuje oznaczenie zapłaty z faktury w chwili importu i nie śledzi późniejszych zmian (ADR 0001).
@@ -133,5 +133,5 @@ Brak testów na prawdziwym KSeF i SMTP w CI. Testy integracyjne z środowiskiem 
   - Token wygenerowany po uwierzytelnieniu XAdES nie wymaga zatwierdzenia. Token wygenerowany w sesji tokenem KSeF dostaje status `AwaitingApproval` i trzeba go zatwierdzić w ciągu 24 h (`POST /tokens/{referenceNumber}/approve`). Generator używa XAdES, więc tego nie dotyczy.
   - Ważność: domyślnie 90 dni od `validFrom`, maksymalnie 365 dni. W jednym kontekście można mieć najwyżej 100 tokenów, licząc też nieaktywne w statusach `Active`, `NotYetActive`, `Pending` i `AwaitingApproval`.
 - **NIP w konfiguracji**: `POST /auth/ksef-token` wymaga kontekstu NIP, więc NIP podmiotu jest wymaganym kluczem `nip` w pliku konfiguracyjnym (wdrożone w #4).
-- **Klient KSeF (#4)**: pobieranie paczki szyfrowane AES-256-CBC, klucz i IV wysyłane w `POST /invoices/exports` zaszyfrowane kluczem `SymmetricKeyEncryption`. Części paczki są scalane przed jednorazowym odszyfrowaniem. Zakres dzielony na okna do 90 dni. Paczka obcięta przez KSeF jest dobierana kolejnymi eksportami od daty kontynuacji. Odpowiedzi części paczki są weryfikowane skrótem SHA-256.
+- **Klient KSeF (#4)**: pobieranie paczki szyfrowane AES-256-CBC, klucz i IV wysyłane w `POST /invoices/exports` zaszyfrowane kluczem `SymmetricKeyEncryption`. Części paczki są scalane przed jednorazowym odszyfrowaniem. Zakres dzielony na okna do 90 dni. Paczka obcięta przez KSeF jest dobierana kolejnymi eksportami od daty kontynuacji. Odpowiedzi części paczki są weryfikowane skrótem SHA-256. Każde żądanie HTTP ma limit czasu (60 s); przerwanie oczekiwania na status eksportu zgłaszane jest jako błąd KSeF.
 - Tracker zadań nie jest skonfigurowany w repo. Specyfikacja zapisana lokalnie. Aby publikować do trackera, uruchom `/setup-matt-pocock-skills`.

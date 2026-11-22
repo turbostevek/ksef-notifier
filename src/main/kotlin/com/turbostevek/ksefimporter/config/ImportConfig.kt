@@ -3,9 +3,13 @@ package com.turbostevek.ksefimporter.config
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeParseException
+
+private val POLISH_ZONE: ZoneId = ZoneId.of("Europe/Warsaw")
 
 @JvmInline
 value class Nip(val value: String)
@@ -17,7 +21,10 @@ data class ImportConfig(
     val recipientEmail: String,
     val ksefEnvironment: KsefEnvironment,
     val smtp: SmtpSettings,
-)
+) {
+    /** Start of the import window: midnight of [startDate] in Polish time. */
+    fun importFrom(): Instant = startDate.atStartOfDay(POLISH_ZONE).toInstant()
+}
 
 data class SmtpSettings(
     val host: String,

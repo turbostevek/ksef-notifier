@@ -28,27 +28,27 @@ class KsefException(message: String, cause: Throwable? = null) : RuntimeExceptio
  */
 class KsefClient(
     apiBaseUrl: String,
-    private val http: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(),
     private val pollInterval: Duration = Duration.ofSeconds(1),
-    private val maxPolls: Int = 60,
 ) {
     private val baseUrl = apiBaseUrl.trimEnd('/')
+    private val http: HttpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build()
     private val mapper = JsonMapper.builder()
         .addModule(kotlinModule())
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         .build()
-    /** Returns the access token for subsequent API calls. */
-    fun login(token: String, nip: Nip): String {
+
+    /** Logs in with the KSeF token for the given NIP context and returns the session access token. */
+    fun login(token: KsefToken, nip: Nip): AccessToken {
         val tokenCertificate = fetchCertificate(USAGE_TOKEN_ENCRYPTION)
         val challenge = post("/auth/challenge", body = null, operation = "Pobranie challenge")
             .let { readJson<ChallengeResponse>(it, "Pobranie challenge") }
-        val encryptedToken = cryptoStep("Logowanie tokenem KSeF") {
+        val encryptedToken = cryptoStep(OP_LOGIN) {
             KsefCrypto.rsaOaepEncrypt(
-                "$token|${challenge.timestampMs}".toByteArray(Charsets.UTF_8),
+                "${token.value}|${challenge.timestampMs}".toByteArray(Charsets.UTF_8),
                 tokenCertificate.certificate,
             )
         }
-        val init = post(
+        val authInit = post(
             "/auth/ksef-token",
             body = mapOf(
                 "challenge" to challenge.challenge,
@@ -56,13 +56,13 @@ class KsefClient(
                 "encryptedToken" to Base64.getEncoder().encodeToString(encryptedToken),
                 "publicKeyId" to tokenCertificate.publicKeyId,
             ),
-            operation = "Logowanie tokenem KSeF",
-        ).let { readJson<AuthInitResponse>(it, "Logowanie tokenem KSeF") }
+            operation = OP_LOGIN,
+        ).let { readJson<AuthInitResponse>(it, OP_LOGIN) }
 
-        val authToken = init.authenticationToken.token
-        awaitStatus("Logowanie tokenem KSeF", { it.status }) {
+        val authToken = authInit.authenticationToken.token
+        awaitStatus(OP_LOGIN, { it.status }) {
             readJson<AuthStatusResponse>(
-                get("/auth/${init.referenceNumber}", bearer = authToken, operation = "Status logowania"),
+                get("/auth/${authInit.referenceNumber}", bearer = authToken, operation = "Status logowania"),
                 "Status logowania",
             )
         }
@@ -70,6 +70,7 @@ class KsefClient(
         return post("/auth/token/redeem", body = null, bearer = authToken, operation = "Odbiór tokenów sesji")
             .let { readJson<RedeemResponse>(it, "Odbiór tokenów sesji") }
             .accessToken.token
+            .let(::AccessToken)
     }
 
     /**
@@ -77,7 +78,7 @@ class KsefClient(
      * limit; a package truncated by KSeF is continued with further exports from the continuation date.
      * Only invoice XML files are returned; package metadata (e.g. `_metadata.json`) is skipped.
      */
-    fun downloadInvoices(accessToken: String, from: Instant, to: Instant): List<InvoiceFile> {
+    fun downloadInvoices(accessToken: AccessToken, from: Instant, to: Instant): List<InvoiceFile> {
         val encryptionCertificate = fetchCertificate(USAGE_SYMMETRIC_KEY_ENCRYPTION)
         val invoices = linkedMapOf<String, InvoiceFile>()
         var windowStart = from
@@ -101,7 +102,7 @@ class KsefClient(
     }
 
     private fun exportPackage(
-        accessToken: String,
+        accessToken: AccessToken,
         from: Instant,
         to: Instant,
         encryptionCertificate: CertificateWithId,
@@ -112,7 +113,7 @@ class KsefClient(
             "encryption" to mapOf(
                 "encryptedSymmetricKey" to Base64.getEncoder()
                     .encodeToString(
-                        cryptoStep("Eksport faktur") {
+                        cryptoStep(OP_EXPORT) {
                             KsefCrypto.rsaOaepEncrypt(symmetricKey, encryptionCertificate.certificate)
                         },
                     ),
@@ -129,17 +130,17 @@ class KsefClient(
             ),
             "compressionType" to "Zip",
         )
-        val reference = post("/invoices/exports", body, bearer = accessToken, operation = "Eksport faktur")
-            .let { readJson<ExportResponse>(it, "Eksport faktur") }
+        val reference = post("/invoices/exports", body, bearer = accessToken.value, operation = OP_EXPORT)
+            .let { readJson<ExportResponse>(it, OP_EXPORT) }
             .referenceNumber
 
-        val status = awaitStatus("Eksport faktur", { it.status }) {
+        val status = awaitStatus(OP_EXPORT, { it.status }) {
             readJson<ExportStatusResponse>(
-                get("/invoices/exports/$reference", bearer = accessToken, operation = "Status eksportu"),
+                get("/invoices/exports/$reference", bearer = accessToken.value, operation = "Status eksportu"),
                 "Status eksportu",
             )
         }
-        val pkg = status.`package` ?: throw KsefException("Eksport faktur zakończony bez paczki")
+        val pkg = status.`package` ?: throw KsefException("$OP_EXPORT zakończony bez paczki")
 
         val encrypted = ByteArrayOutputStream()
         pkg.parts.sortedBy { it.ordinalNumber }.forEach { part ->
@@ -158,7 +159,8 @@ class KsefClient(
     }
 
     private fun download(url: String, expectedHash: String): ByteArray {
-        val response = fetch(HttpRequest.newBuilder(URI.create(url)).GET().build(), "Pobranie części paczki")
+        val request = HttpRequest.newBuilder(URI.create(url)).GET().timeout(REQUEST_TIMEOUT).build()
+        val response = fetch(request, "Pobranie części paczki")
         val bytes = response.body()
         if (KsefCrypto.sha256Base64(bytes) != expectedHash) {
             throw KsefException("Pobrana część paczki ma niezgodny skrót SHA-256")
@@ -178,17 +180,26 @@ class KsefClient(
         return CertificateWithId(x509, certificate.publicKeyId)
     }
 
-    private fun <T> awaitStatus(operation: String, statusOf: (T) -> StatusInfo, fetch: () -> T): T {
-        repeat(maxPolls) {
-            val result = fetch()
+    private fun <T> awaitStatus(operation: String, statusOf: (T) -> StatusInfo, poll: () -> T): T {
+        repeat(MAX_POLLS) {
+            val result = poll()
             val status = statusOf(result)
             when (status.code) {
                 STATUS_SUCCESS -> return result
-                STATUS_IN_PROGRESS -> Thread.sleep(pollInterval.toMillis())
+                STATUS_IN_PROGRESS -> sleepBetweenPolls(operation)
                 else -> throw KsefException("$operation: KSeF zwrócił status ${status.code} (${status.description})")
             }
         }
         throw KsefException("$operation: przekroczono czas oczekiwania na odpowiedź KSeF")
+    }
+
+    private fun sleepBetweenPolls(operation: String) {
+        try {
+            Thread.sleep(pollInterval.toMillis())
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw KsefException("$operation: przerwano oczekiwanie na KSeF", e)
+        }
     }
 
     private fun get(path: String, bearer: String? = null, operation: String): HttpResponse<ByteArray> {
@@ -209,7 +220,7 @@ class KsefClient(
     private fun request(path: String, bearer: String?): HttpRequest.Builder {
         val builder = HttpRequest.newBuilder(URI.create(baseUrl + path))
             .header("Accept", "application/json")
-            .timeout(Duration.ofSeconds(60))
+            .timeout(REQUEST_TIMEOUT)
         return if (bearer != null) builder.header("Authorization", "Bearer $bearer") else builder
     }
 
@@ -298,8 +309,13 @@ class KsefClient(
     private companion object {
         const val USAGE_TOKEN_ENCRYPTION = "KsefTokenEncryption"
         const val USAGE_SYMMETRIC_KEY_ENCRYPTION = "SymmetricKeyEncryption"
+        const val OP_LOGIN = "Logowanie tokenem KSeF"
+        const val OP_EXPORT = "Eksport faktur"
         const val STATUS_IN_PROGRESS = 100
         const val STATUS_SUCCESS = 200
+        const val MAX_POLLS = 60
+        val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(15)
+        val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(60)
         val EXPORT_WINDOW: Duration = Duration.ofDays(90)
     }
 }
