@@ -50,7 +50,7 @@ Lokalna aplikacja uruchamiana raz dziennie przez harmonogram systemowy (Harmonog
 Stack: Kotlin, Spring Boot, JVM 21, budowanie przez Gradle lub Maven (do wyboru przy starcie projektu). Sposób uruchomienia: fat JAR wywoływany z harmonogramu systemowego; bez wbudowanego schedulera. Interfejs użytkownika poza zakresem MVP.
 
 Moduły:
-- **Konfiguracja**: wczytuje plik z godziną importu, datą startową, adresem odbiorcy, środowiskiem KSeF (domyślnie test), ustawieniami SMTP. Odwołuje się do sekretów po nazwie, nie zawiera ich wartości.
+- **Konfiguracja**: wczytuje plik z NIP-em podmiotu (kontekst uwierzytelnienia tokenem), godziną importu, datą startową, adresem odbiorcy, środowiskiem KSeF (domyślnie test), ustawieniami SMTP. Odwołuje się do sekretów po nazwie, nie zawiera ich wartości.
   - Format pliku: YAML.
   - Lokalizacja: katalog użytkownika (Windows `%APPDATA%\ksef-importer`, Linux `~/.config/ksef-importer`). Ścieżkę można nadpisać argumentem CLI.
   - Kolejność nadpisywania: argument CLI > zmienna środowiskowa > plik. Plik jest źródłem wartości domyślnych.
@@ -127,5 +127,10 @@ Brak testów na prawdziwym KSeF i SMTP w CI. Testy integracyjne z środowiskiem 
 - **Założenia**:
   1. Płatność częściowa (`ZnacznikZaplatyCzesciowej` = `1` lub `2`) nie oznacza faktury jako opłaconej. Tylko `Zaplacono` = `1` ją oznacza.
   2. Gdy w fakturze jest wiele `TerminPlatnosci`, parser bierze najwcześniejszy `Termin`.
-  3. Ścieżki i zachowanie z dokumentacji są zgodne z OpenAPI TEST, ale nie zostały sprawdzone na żywym środowisku. Wymaga ręcznego testu z tokenem testowym (open-items).
+  3. Ścieżki i schematy są sprawdzone w OpenAPI TEST (v2): `/auth/challenge`, `/auth/ksef-token`, `/auth/{referenceNumber}`, `/auth/token/redeem`, `/auth/token/refresh`, `/tokens/rev2`, `/tokens/rev2/{referenceNumber}`, `/invoices/query/metadata`. Nie zostały sprawdzone na żywym środowisku. Wymaga ręcznego testu z tokenem testowym (open-items).
+  4. Zapytanie o faktury zakupowe używa `InvoiceQuerySubjectType` = `Subject2` (podmiot 2, nabywca), zgodnie z definicją Faktury zakupowej.
+- **Token testowy**: generuje go osobna aplikacja `ksef-token-generator-csharp` (C# / .NET 10, poza tym repozytorium, [ADR 0003](/home/stevek/Projects/java/ksef-importer/docs/adr/0003-generator-tokenow-testowych-w-javie.md)). Procedura: uwierzytelnienie XAdES certyfikatem testowym na losowym NIP-ie, następnie `POST /tokens/rev2` z uprawnieniami `InvoiceRead` i `InvoiceWrite`. Token jest zwracany tylko raz i nadaje się do użycia dopiero w statusie `Active`.
+  - Token wygenerowany po uwierzytelnieniu XAdES nie wymaga zatwierdzenia. Token wygenerowany w sesji tokenem KSeF dostaje status `AwaitingApproval` i trzeba go zatwierdzić w ciągu 24 h (`POST /tokens/{referenceNumber}/approve`). Generator używa XAdES, więc tego nie dotyczy.
+  - Ważność: domyślnie 90 dni od `validFrom`, maksymalnie 365 dni. W jednym kontekście można mieć najwyżej 100 tokenów, licząc też nieaktywne w statusach `Active`, `NotYetActive`, `Pending` i `AwaitingApproval`.
+- **NIP w konfiguracji**: `POST /auth/ksef-token` wymaga kontekstu NIP, więc NIP podmiotu jest wymaganym kluczem `nip` w pliku konfiguracyjnym. Wdrożenie: issue #4.
 - Tracker zadań nie jest skonfigurowany w repo. Specyfikacja zapisana lokalnie. Aby publikować do trackera, uruchom `/setup-matt-pocock-skills`.

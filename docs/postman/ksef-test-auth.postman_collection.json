@@ -1,0 +1,293 @@
+{
+  "info": {
+    "_postman_id": "7f1c2a40-5b7e-4c59-9a7e-0c0ffee00001",
+    "name": "KSeF TEST - uwierzytelnianie tokenem",
+    "description": "Przepływ uwierzytelniania tokenem KSeF na środowisku TEST (KSeF API v2). Wymaga environment `KSeF TEST` z wypełnionym `nip` i sekretem `ksefToken` (token z generatora). Kolejność: 1 -> 6. Sekrety tymczasowe (challenge, authenticationToken, accessToken) są trzymane w zmiennych runtime Postmana i nie są zapisywane do pliku.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Klucz publiczny do szyfrowania tokenu",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/security/public-key-certificates"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const certs = pm.response.json();",
+              "const tokenCert = certs.find(c => c.usage.includes('KsefTokenEncryption'));",
+              "pm.test('Jest certyfikat KsefTokenEncryption', () => pm.expect(tokenCert).to.not.be.undefined);",
+              "pm.collectionVariables.set('ksefTokenCertificate', tokenCert.certificate);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Challenge",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/auth/challenge"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('challenge', body.challenge);",
+              "pm.collectionVariables.set('challengeTimestampMs', String(body.timestampMs));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Wyślij zaszyfrowany token (ksef-token)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge\": \"{{challenge}}\",\n  \"contextIdentifier\": {\n    \"type\": \"Nip\",\n    \"value\": \"{{nip}}\"\n  },\n  \"encryptedToken\": \"{{encryptedToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/ksef-token"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Szyfrowanie RSA-OAEP (SHA-256) synchronicznie: sandbox Postmana nie obsługuje await,",
+              "// a crypto.subtle jest asynchroniczne. Hash i MGF1 z CryptoJS, potęgowanie na BigInt.",
+              "const toWA = (bytes) => {",
+              "  const words = [];",
+              "  for (let i = 0; i < bytes.length; i++) {",
+              "    words[i >>> 2] = (words[i >>> 2] || 0) | (bytes[i] << (24 - (i % 4) * 8));",
+              "  }",
+              "  return CryptoJS.lib.WordArray.create(words, bytes.length);",
+              "};",
+              "const fromWA = (wa) => {",
+              "  const out = new Uint8Array(wa.sigBytes);",
+              "  for (let i = 0; i < wa.sigBytes; i++) {",
+              "    out[i] = (wa.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;",
+              "  }",
+              "  return out;",
+              "};",
+              "const concat = (...arrs) => {",
+              "  const out = new Uint8Array(arrs.reduce((s, a) => s + a.length, 0));",
+              "  let p = 0;",
+              "  for (const a of arrs) { out.set(a, p); p += a.length; }",
+              "  return out;",
+              "};",
+              "const sha256 = (bytes) => fromWA(CryptoJS.SHA256(toWA(bytes)));",
+              "const mgf1 = (seed, len) => {",
+              "  let out = new Uint8Array(0);",
+              "  for (let c = 0; out.length < len; c++) {",
+              "    const ctr = Uint8Array.from([c >>> 24, (c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff]);",
+              "    out = concat(out, sha256(concat(seed, ctr)));",
+              "  }",
+              "  return out.slice(0, len);",
+              "};",
+              "const xor = (a, b) => a.map((x, i) => x ^ b[i]);",
+              "const modPow = (base, exp, mod) => {",
+              "  let r = 1n;",
+              "  let b = base % mod;",
+              "  while (exp > 0n) {",
+              "    if (exp & 1n) r = (r * b) % mod;",
+              "    b = (b * b) % mod;",
+              "    exp >>= 1n;",
+              "  }",
+              "  return r;",
+              "};",
+              "const bytesToBig = (bytes) => bytes.reduce((acc, byte) => (acc << 8n) | BigInt(byte), 0n);",
+              "",
+              "// Minimalny odczyt DER: tag, granice treści i elementy potomne.",
+              "const readTlv = (buf, pos) => {",
+              "  let len = buf[pos + 1];",
+              "  let hdr = 2;",
+              "  if (len & 0x80) {",
+              "    const n = len & 0x7f;",
+              "    len = 0;",
+              "    for (let i = 0; i < n; i++) len = (len * 256) + buf[pos + 2 + i];",
+              "    hdr = 2 + n;",
+              "  }",
+              "  return { tag: buf[pos], start: pos, end: pos + hdr + len, contentStart: pos + hdr };",
+              "};",
+              "const children = (node, buf) => {",
+              "  const out = [];",
+              "  let p = node.contentStart;",
+              "  while (p < node.end) {",
+              "    const c = readTlv(buf, p);",
+              "    out.push(c);",
+              "    p = c.end;",
+              "  }",
+              "  return out;",
+              "};",
+              "",
+              "// Certyfikat X.509: Certificate -> TBSCertificate -> SubjectPublicKeyInfo -> RSAPublicKey.",
+              "// Zmienne ustawia request 1 (certyfikat) i request 2 (challenge). Bez nich atob dostaje 'undefined'.",
+              "const certB64 = pm.collectionVariables.get('ksefTokenCertificate');",
+              "const challengeTs = pm.collectionVariables.get('challengeTimestampMs');",
+              "if (!certB64 || !challengeTs) {",
+              "  throw new Error('Brak certyfikatu lub challenge. Uruchom najpierw requesty 1 i 2 (kolejność 1 -> 6).');",
+              "}",
+              "const der = Uint8Array.from(atob(certB64), c => c.charCodeAt(0));",
+              "const tbs = children(readTlv(der, 0), der)[0];",
+              "const tbsItems = children(tbs, der);",
+              "const spki = tbsItems[(tbsItems[0].tag === 0xa0 ? 1 : 0) + 5];",
+              "const bitString = children(spki, der)[1];",
+              "const rsaPublicKey = readTlv(der, bitString.contentStart + 1);",
+              "const [modN, expE] = children(rsaPublicKey, der).map(i => der.slice(i.contentStart, i.end));",
+              "const n = bytesToBig(modN);",
+              "const e = bytesToBig(expE);",
+              "const k = (n.toString(16).length + 1) >> 1;",
+              "",
+              "// Plaintext: `token|timestampMs` (timestampMs z challenge).",
+              "const message = Uint8Array.from(pm.environment.get('ksefToken') + '|' + pm.collectionVariables.get('challengeTimestampMs'), c => c.charCodeAt(0));",
+              "const hLen = 32;",
+              "if (message.length > k - 2 * hLen - 2) throw new Error('Token za długi dla RSA-OAEP');",
+              "",
+              "const lHash = sha256(new Uint8Array(0));",
+              "const ps = new Uint8Array(k - message.length - 2 * hLen - 2);",
+              "const db = concat(lHash, ps, Uint8Array.from([0x01]), message);",
+              "// Losowy seed: crypto.getRandomValues jeśli dostępne, inaczej CryptoJS.",
+              "const seed = (typeof crypto !== 'undefined' && crypto.getRandomValues)",
+              "  ? crypto.getRandomValues(new Uint8Array(hLen))",
+              "  : fromWA(CryptoJS.lib.WordArray.random(hLen));",
+              "const maskedDb = xor(db, mgf1(seed, k - hLen - 1));",
+              "const maskedSeed = xor(seed, mgf1(maskedDb, hLen));",
+              "const em = concat(Uint8Array.from([0]), maskedSeed, maskedDb);",
+              "",
+              "const cipher = modPow(bytesToBig(em), e, n);",
+              "const cipherBytes = new Uint8Array(k);",
+              "let rest = cipher;",
+              "for (let i = k - 1; i >= 0; i--) {",
+              "  cipherBytes[i] = Number(rest & 0xffn);",
+              "  rest >>= 8n;",
+              "}",
+              "pm.collectionVariables.set('encryptedToken', btoa(String.fromCharCode(...cipherBytes)));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 202', () => pm.response.to.have.status(202));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('authReferenceNumber', body.referenceNumber);",
+              "pm.collectionVariables.set('authOperationToken', body.authenticationToken.token);",
+              "pm.collectionVariables.set('authPollCount', '0');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Status uwierzytelniania (poll)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{authOperationToken}}", "type": "string" }]
+        },
+        "url": "{{baseUrl}}/auth/{{authReferenceNumber}}"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Opóźnienie ok. 1 s między odpytaniami (bez await, sandbox go nie obsługuje).",
+              "if (Number(pm.collectionVariables.get('authPollCount')) > 0) {",
+              "  const until = Date.now() + 1000;",
+              "  while (Date.now() < until) { }",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const code = pm.response.json().status.code;",
+              "const attempts = Number(pm.collectionVariables.get('authPollCount')) + 1;",
+              "pm.collectionVariables.set('authPollCount', String(attempts));",
+              "if (code === 100 && attempts < 60) {",
+              "  pm.execution.setNextRequest(pm.info.requestName);",
+              "} else {",
+              "  pm.test('Uwierzytelnianie zakończone sukcesem (status 200)', () => pm.expect(code).to.eql(200));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Redeem: accessToken",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{authOperationToken}}", "type": "string" }]
+        },
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{baseUrl}}/auth/token/redeem"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Otrzymano accessToken', () => pm.expect(body.accessToken.token).to.be.a('string'));",
+              "pm.collectionVariables.set('accessToken', body.accessToken.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Lista tokenów (weryfikacja accessToken)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+        },
+        "url": "{{baseUrl}}/tokens/rev2"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

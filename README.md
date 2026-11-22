@@ -32,7 +32,9 @@ Kody wyjścia:
 
 ## Token KSeF
 
-Token nie należy do pliku konfiguracyjnego. Jest przechowywany w systemowym magazynie sekretów pod nazwą `ksef-importer/ksef-token`:
+Token nie należy do pliku konfiguracyjnego. Jest przechowywany w systemowym magazynie sekretów pod nazwą `ksef-importer/ksef-token`.
+
+Token testowy (środowisko `test`) generuje osobna aplikacja `ksef-token-generator-csharp` (C# / .NET 10, poza tym repozytorium, zob. [ADR 0003](docs/adr/0003-generator-tokenow-testowych-w-javie.md)). Uruchomienie: `dotnet run --no-build > token.out` (token na stdout, status na stderr). Sprawdzenie tokena: `dotnet run --no-build -- verify <nip> token.out`. Token zapisujesz w magazynie tak samo jak produkcyjny:
 
 - Ubuntu (libsecret, pakiet `libsecret-tools`):
   ```sh
@@ -45,6 +47,7 @@ Token nie należy do pliku konfiguracyjnego. Jest przechowywany w systemowym mag
 Plik YAML bez sekretów. Token KSeF i hasło SMTP nie należą do tego pliku; klucze spoza poniższego schematu (np. `smtp.password`) powodują błąd.
 
 ```yaml
+nip: "1234563218"            # wymagane, 10 cyfr z poprawną sumą kontrolną, NIP podmiotu
 importTime: "07:30"          # wymagane, format HH:mm
 startDate: 2026-01-01        # wymagane, data startowa pierwszego importu
 recipientEmail: zona@example.com   # wymagane
