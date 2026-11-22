@@ -54,11 +54,15 @@ class ImportCommand(
             exitCode = EXIT_CONFIG_ERROR
             return
         }
+        // Throwable, nie RuntimeException: każda nieobsłużona awaria w CLI ma dać kod 4, także Error.
         val token = try {
             secrets.read(SecretName.KSEF_TOKEN)
         } catch (e: SecretStoreException) {
             System.err.println("Błąd magazynu sekretów: ${e.message}")
             exitCode = EXIT_CONFIG_ERROR
+            return
+        } catch (e: Throwable) {
+            reportUnexpectedError(e)
             return
         }
         if (token == null) {
@@ -78,11 +82,15 @@ class ImportCommand(
             log.error("Błąd KSeF: {}", e.message)
             System.err.println("Błąd KSeF: ${e.message}")
             exitCode = EXIT_KSEF_ERROR
-        } catch (e: RuntimeException) {
-            log.error("Nieoczekiwany błąd importu", e)
-            System.err.println("Nieoczekiwany błąd importu: ${e.message}")
-            exitCode = EXIT_UNEXPECTED_ERROR
+        } catch (e: Throwable) {
+            reportUnexpectedError(e)
         }
+    }
+
+    private fun reportUnexpectedError(e: Throwable) {
+        log.error("Nieoczekiwany błąd importu", e)
+        System.err.println("Nieoczekiwany błąd importu: ${e.message}")
+        exitCode = EXIT_UNEXPECTED_ERROR
     }
 
     private fun runCheckToken() {

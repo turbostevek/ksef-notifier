@@ -20,6 +20,12 @@ Domyślne etykiety: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: `GLOSSARY.md` i `docs/adr/` w korzeniu repo. See `docs/agents/domain.md`.
 
+### Testy
+
+- Testy dla istniejącej klasy dopisujesz do jej istniejącego pliku testowego.
+- Nowa klasa może dostać nowy plik testowy, odpowiadający pakietem i nazwą klasie.
+- Klucze testowe (np. `src/test/resources/ksef/test-ksef.p12`) mogą leżeć w repo, ale tylko na potrzeby testów jednostkowych. Dodanie nowego klucza wymaga akceptacji właściciela.
+
 ### Otwarte tematy
 
 Tematy wymagające decyzji właściciela albo ręcznego sprawdzenia (np. na Windows) zapisuj w `docs/open-items.md`:

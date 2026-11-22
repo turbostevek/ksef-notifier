@@ -145,6 +145,17 @@ class ImportCommandTest {
         assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Nieoczekiwany błąd importu"))
     }
 
+    @Test
+    fun `nieoczekiwany wyjatek z magazynu sekretow podczas importu konczy sie kodem 4`() {
+        val config = writeConfig(VALID_YAML)
+
+        val command = ImportCommand(CrashingSecretStore(), importService)
+        command.run(DefaultApplicationArguments("import", "--config=${config}"))
+
+        assertEquals(4, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Nieoczekiwany błąd importu"))
+    }
+
     private fun writeConfig(yaml: String): Path =
         dir.resolve("ksef-importer.yml").also { Files.writeString(it, yaml) }
 
@@ -156,6 +167,10 @@ class ImportCommandTest {
 
     private class FailingSecretStore : SecretStore {
         override fun read(name: SecretName): String? = throw SecretStoreException("Nie można odczytać magazynu sekretów")
+    }
+
+    private class CrashingSecretStore : SecretStore {
+        override fun read(name: SecretName): String? = throw IllegalStateException("awaria testowa")
     }
 
     private companion object {
