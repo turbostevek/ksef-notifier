@@ -37,6 +37,13 @@ class Fa3InvoiceParserTest {
     }
 
     @Test
+    fun `z jednym terminem platnosci zapisuje ten termin`() {
+        val invoice = parse(platnosc = "<TerminPlatnosci><Termin>2026-05-20</Termin></TerminPlatnosci>")
+
+        assertEquals(LocalDate.of(2026, 5, 20), invoice.dueDate)
+    }
+
+    @Test
     fun `z kilkoma terminami platnosci zapisuje najwczesniejszy`() {
         val invoice = parse(
             platnosc = "<TerminPlatnosci><Termin>2026-05-20</Termin></TerminPlatnosci>" +

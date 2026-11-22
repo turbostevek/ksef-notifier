@@ -108,7 +108,7 @@ class ImportCommandTest {
     }
 
     @Test
-    fun `config podany ze spacja zamiast znaku równości konczy sie kodem 2`() {
+    fun `config podany ze spacja zamiast znaku rownosci konczy sie kodem 2`() {
         val config = writeConfig(VALID_YAML)
 
         val command = ImportCommand(FakeSecretStore(), importService)
@@ -126,7 +126,7 @@ class ImportCommandTest {
     }
 
     @Test
-    fun `config z pusta wartoscia po znaku równości konczy sie kodem 2`() {
+    fun `config z pusta wartoscia po znaku rownosci konczy sie kodem 2`() {
         val command = ImportCommand(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config="))
 

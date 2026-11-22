@@ -69,7 +69,6 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         connection.close()
     }
 
-    /** Column values by column name, so the INSERT binds by name and not by position. */
     private fun PurchaseInvoice.toRow(importedAt: Instant): Map<String, Any?> = mapOf(
         "ksef_number" to ksefNumber,
         "seller_nip" to sellerNip,

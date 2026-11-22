@@ -3,7 +3,6 @@ package com.turbostevek.ksefimporter.history
 import java.math.BigDecimal
 import java.time.LocalDate
 
-/** Purchase invoice (buyer = configured NIP) as kept in the local history. */
 data class PurchaseInvoice(
     val ksefNumber: String,
     val sellerNip: String?,
