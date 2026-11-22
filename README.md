@@ -18,11 +18,27 @@ java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar import --config=ksef-impor
 
 Parametr `--config` jest opcjonalny; domyślnie używany jest plik `ksef-importer.yml` w bieżącym katalogu.
 
+Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym magazynie sekretów (wartości nie wypisuje):
+
+```sh
+java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
+```
+
 Kody wyjścia:
 
-- `0` – konfiguracja poprawna
-- `1` – błąd konfiguracji (brak parametru, nieprawidłowa wartość, brak pliku); komunikat jest wypisywany na stderr
-- `2` – brak polecenia `import`
+- `0` – konfiguracja poprawna (lub token zapisany, dla `check-token`)
+- `1` – błąd konfiguracji (brak parametru, nieprawidłowa wartość, brak pliku) albo brak tokenu KSeF w magazynie sekretów; komunikat jest wypisywany na stderr
+- `2` – brak polecenia `import` lub `check-token`
+
+## Token KSeF
+
+Token nie należy do pliku konfiguracyjnego. Jest przechowywany w systemowym magazynie sekretów pod nazwą `ksef-importer/ksef-token`:
+
+- Ubuntu (libsecret, pakiet `libsecret-tools`):
+  ```sh
+  secret-tool store --label='KSeF token' service ksef-importer account ksef-token
+  ```
+- Windows: Menedżer poświadczeń → Dane logowania systemu Windows → Dodaj poświadczenie ogólne, adres sieciowy `ksef-importer/ksef-token`, hasło = token.
 
 ## Konfiguracja
 
