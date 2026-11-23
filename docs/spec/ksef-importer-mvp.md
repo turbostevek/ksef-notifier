@@ -23,7 +23,7 @@ Lokalna aplikacja uruchamiana raz dziennie przez harmonogram systemowy (Harmonog
 9. Jako użytkownik, chcę, żeby w Historii był numer KSeF, NIP sprzedawcy, data wystawienia, termin płatności, kwota, waluta, oznaczenie zapłaty i informacja o wysłanym powiadomieniu, żeby wiedzieć, o czym jest faktura.
 10. Jako użytkownik, chcę, żeby w Historii brakujący termin płatności był oznaczony jako „brak terminu”, a w powiadomieniu data wystawienia była podana jako odniesienie, żeby faktura nie zginęła.
 11. Jako użytkownik, chcę, żeby pliki faktur nie były zapisywane lokalnie, żeby nie przechowywać danych, których nie potrzebuję.
-12. Jako użytkownik, chcę, żeby import pobierał tylko faktury od ostatniego udanego importu, żeby nie pobierać tego samego wielokrotnie.
+12. Jako użytkownik, chcę, żeby import pobierał tylko faktury od ostatniego udanego importu, żeby nie pobierać tego samego wielokrotnie. Wyjątek: po nieudanej wysyłce powiadomienia kolejny przebieg ponownie pobiera ten sam zakres (patrz 28).
 13. Jako użytkownik, chcę, żeby przy pierwszym uruchomieniu import obejmował okres od daty z konfiguracji, żeby objąć starsze faktury, które jeszcze nie zostały zaimportowane.
 14. Jako użytkownik, chcę, żeby data startowa importu była konfigurowalna, żeby móc dostosować ją do potrzeb.
 15. Jako użytkownik, chcę dostać jeden zbiorczy email z nowymi fakturami do zapłaty, żeby nie dostawać wielu wiadomości naraz.
@@ -67,7 +67,7 @@ Zasady:
 - Faktura zakupowa to faktura, w której nabywcą jest podmiot.
 - Brak bloku płatności lub oznaczenia zapłaty oznacza fakturę do zapłaty.
 - Faktura jest zgłaszana w powiadomieniu co najwyżej raz. Znacznik „powiadomiono” ustawiany po udanej wysyłce.
-- Nieudany przebieg nie przesuwa daty ostatniego sukcesu.
+- Nieudany przebieg nie przesuwa daty ostatniego sukcesu. Kolejny przebieg pobiera ponownie zakres od tej daty; duplikaty pomija zapis po numerze KSeF.
 - Zakres pierwszego importu bierze datę startową z konfiguracji; kolejne przebiegi biorą datę ostatniego sukcesu.
 - Oznaczenie zapłaty w FA(3): element `Fa/Platnosc/Zaplacono` o wartości `1` (typ `TWybor1`), opcjonalnie z `Fa/Platnosc/DataZaplaty`. Źródło: XSD FA(3) (zob. Further Notes).
 - Termin płatności pochodzi z XML: `Fa/Platnosc/TerminPlatnosci/Termin` (opcjonalny, może wystąpić do 100 razy). Metadane faktury z API (`InvoiceMetadata`) nie zawierają terminu ani oznaczenia zapłaty.
