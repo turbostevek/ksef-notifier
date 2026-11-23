@@ -3,6 +3,7 @@ package com.turbostevek.ksefimporter.cli
 import com.turbostevek.ksefimporter.config.ImportConfig
 import com.turbostevek.ksefimporter.history.PaymentNotificationSender
 import com.turbostevek.ksefimporter.history.PurchaseInvoiceImporter
+import com.turbostevek.ksefimporter.history.fa3Xml
 import com.turbostevek.ksefimporter.ksef.InvoiceFile
 import com.turbostevek.ksefimporter.ksef.InvoiceSource
 import com.turbostevek.ksefimporter.ksef.KsefClientFactory
@@ -147,6 +148,24 @@ class ImportCommandTest {
 
         assertEquals(4, command.exitCode)
         assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Nieoczekiwany błąd importu"))
+    }
+
+    @Test
+    fun `blad wysylki powiadomienia konczy sie kodem 5 i jest zapisany w logu`() {
+        val config = writeConfig(VALID_YAML)
+        val source = object : InvoiceSource {
+            override fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile> =
+                listOf(InvoiceFile("A", fa3Xml()))
+        }
+        val failingNotifier = PurchaseInvoiceImporter(source, PaymentNotificationSender { _, _ ->
+            throw IllegalStateException("SMTP niedostępny")
+        })
+
+        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingNotifier)
+        command.run(DefaultApplicationArguments("import", "--config=${config}"))
+
+        assertEquals(5, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("powiadomienia"))
     }
 
     @Test

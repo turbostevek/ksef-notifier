@@ -8,6 +8,7 @@ import com.turbostevek.ksefimporter.ksef.KsefException
 import com.turbostevek.ksefimporter.ksef.KsefToken
 import com.turbostevek.ksefimporter.validConfigYaml
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -67,12 +68,15 @@ class PurchaseInvoiceImporterTest {
 
         val first = importer.importInvoices(config, token, historyPath)
         assertEquals(1, first.added)
+        assertTrue(first.notificationFailed)
         assertTrue(notifier.sent.isEmpty())
         assertEquals(listOf("A"), InvoiceHistory(historyPath).use { it.unnotifiedToPay().map { invoice -> invoice.ksefNumber } })
 
         notifier.failure = null
+        val retry = importer.importInvoices(config, token, historyPath)
         importer.importInvoices(config, token, historyPath)
-        importer.importInvoices(config, token, historyPath)
+
+        assertFalse(retry.notificationFailed)
 
         assertEquals(listOf(listOf("A")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
         assertTrue(InvoiceHistory(historyPath).use { it.unnotifiedToPay() }.isEmpty())

@@ -26,7 +26,7 @@ java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 
 Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku.
 
-Po imporcie wysyłany jest jeden zbiorczy e-mail HTML na adres `recipientEmail` z tabelą faktur zakupowych do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Kolumny w stałej kolejności: data wystawienia, numer KSeF, sprzedawca, adres, forma płatności, rachunek, kwota, termin płatności. W tabeli e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) jest tylko logowany i nie zmienia kodu wyjścia; kolejny przebieg ponawia wysyłkę zaległych faktur.
+Po imporcie wysyłany jest jeden zbiorczy e-mail HTML na adres `recipientEmail` z tabelą faktur zakupowych do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Kolumny w stałej kolejności: data wystawienia, numer KSeF, sprzedawca, adres, forma płatności, rachunek, kwota, termin płatności. W tabeli e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) nie cofa importu, jest logowany i kończy przebieg kodem `5`; kolejny przebieg ponawia wysyłkę zaległych faktur.
 
 Kody wyjścia:
 
@@ -35,6 +35,7 @@ Kody wyjścia:
 - `2` – brak polecenia `import` lub `check-token`
 - `3` – błąd KSeF (token odrzucony lub wygasły, błąd eksportu, brak połączenia); komunikat jest logowany jako błąd i wypisywany na stderr
 - `4` – nieoczekiwany błąd podczas importu (np. błąd wewnętrzny); komunikat jest logowany wraz z przyczyną i wypisywany na stderr
+- `5` – import zakończony, ale nie udało się wysłać powiadomienia (np. błąd SMTP); faktury nie są oznaczane jako powiadomione, a błąd jest logowany i wypisywany na stderr
 
 ## Token KSeF
 

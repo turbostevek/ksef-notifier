@@ -78,7 +78,14 @@ class ImportCommand(
                 config.ksefEnvironment.value,
                 result.added,
             )
-            exitCode = EXIT_OK
+            if (result.notificationFailed) {
+                val message = "Nie udało się wysłać powiadomienia o fakturach do zapłaty; kolejny przebieg ponowi wysyłkę"
+                log.error(message)
+                System.err.println(message)
+                exitCode = EXIT_NOTIFICATION_ERROR
+            } else {
+                exitCode = EXIT_OK
+            }
         } catch (e: KsefException) {
             log.error("Błąd KSeF: {}", e.message)
             System.err.println("Błąd KSeF: ${e.message}")
@@ -121,6 +128,7 @@ class ImportCommand(
         const val EXIT_USAGE = 2
         const val EXIT_KSEF_ERROR = 3
         const val EXIT_UNEXPECTED_ERROR = 4
+        const val EXIT_NOTIFICATION_ERROR = 5
         val MISSING_TOKEN_MESSAGE = "Brak sekretu '${SecretName.KSEF_TOKEN.qualifiedName}' w systemowym magazynie sekretów. " +
             "Zapisz token KSeF pod tą nazwą."
     }
