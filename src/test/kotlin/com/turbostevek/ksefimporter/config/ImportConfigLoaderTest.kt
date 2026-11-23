@@ -51,6 +51,32 @@ class ImportConfigLoaderTest {
     }
 
     @Test
+    fun `brakujace godzina importu i port SMTP biora wartosci z domyslnej konfiguracji`() {
+        val config = loader.parse(
+            """
+            nip: "9261051389"
+            startDate: 2026-01-01
+            recipientEmail: zona@example.com
+            smtp:
+              host: smtp.example.com
+              from: ksef@example.com
+            """.trimIndent()
+        )
+
+        assertEquals(LocalTime.of(7, 30), config.importTime)
+        assertEquals(587, config.smtp.port)
+    }
+
+    @Test
+    fun `wartosc z profilu nadpisuje wartosc domyslna`() {
+        val yaml = minimalValidYaml.replace("\"07:30\"", "\"06:00\"")
+
+        val config = loader.parse(yaml)
+
+        assertEquals(LocalTime.of(6, 0), config.importTime)
+    }
+
+    @Test
     fun `nip o innej dlugosci niz 10 cyfr jest odrzucany`() {
         val yaml = minimalValidYaml.replace("9261051389", "926105138")
 

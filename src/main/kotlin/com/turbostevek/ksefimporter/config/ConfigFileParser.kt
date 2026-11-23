@@ -30,7 +30,23 @@ internal data class ConfigFile(
     val recipientEmail: String? = null,
     val ksef: KsefFile? = null,
     val smtp: SmtpFile? = null,
-)
+) {
+
+    /** Values set in this file win; missing ones are taken from [defaults], nested sections field by field. */
+    fun withDefaults(defaults: ConfigFile): ConfigFile = ConfigFile(
+        importTime = importTime ?: defaults.importTime,
+        startDate = startDate ?: defaults.startDate,
+        nip = nip ?: defaults.nip,
+        recipientEmail = recipientEmail ?: defaults.recipientEmail,
+        ksef = KsefFile(environment = ksef?.environment ?: defaults.ksef?.environment),
+        smtp = SmtpFile(
+            host = smtp?.host ?: defaults.smtp?.host,
+            port = smtp?.port ?: defaults.smtp?.port,
+            username = smtp?.username ?: defaults.smtp?.username,
+            from = smtp?.from ?: defaults.smtp?.from,
+        ),
+    )
+}
 
 internal data class KsefFile(
     val environment: String? = null,

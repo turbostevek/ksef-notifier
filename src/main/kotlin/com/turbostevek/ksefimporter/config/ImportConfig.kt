@@ -48,6 +48,7 @@ class ConfigException(message: String) : RuntimeException(message)
 class ImportConfigLoader {
 
     private val parser = ConfigFileParser()
+    private val defaults = parser.parse(readDefaults())
 
     fun load(path: Path): ImportConfig {
         if (!Files.isRegularFile(path)) {
@@ -62,7 +63,7 @@ class ImportConfigLoader {
     }
 
     fun parse(yaml: String): ImportConfig {
-        val file = parser.parse(yaml)
+        val file = parser.parse(yaml).withDefaults(defaults)
         val smtp = file.smtp
         val missing = mutableListOf<String>()
 
@@ -98,11 +99,18 @@ class ImportConfigLoader {
             ksefEnvironment = environment,
             smtp = SmtpSettings(
                 host = host,
-                port = smtp?.port ?: DEFAULT_SMTP_PORT,
+                port = checkNotNull(smtp?.port) { "Brak smtp.port w $DEFAULTS_RESOURCE" },
                 username = smtp?.username,
                 from = from,
             ),
         )
+    }
+
+    private fun readDefaults(): String {
+        val stream = checkNotNull(ImportConfigLoader::class.java.getResourceAsStream(DEFAULTS_RESOURCE)) {
+            "Brak wbudowanej domyślnej konfiguracji: $DEFAULTS_RESOURCE"
+        }
+        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
 
     private fun <T> parseOrFail(name: String, raw: String, parse: (String) -> T): T =
@@ -113,7 +121,7 @@ class ImportConfigLoader {
         }
 
     private companion object {
-        const val DEFAULT_SMTP_PORT = 587
+        const val DEFAULTS_RESOURCE = "/ksef-importer-defaults.yml"
         val NIP_PATTERN = Regex("\\d{10}")
     }
 }

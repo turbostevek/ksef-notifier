@@ -59,6 +59,8 @@ Ręczne sprawdzenie przepływu uwierzytelniania na TEST (bez aplikacji): kolekcj
 
 Plik YAML bez sekretów. Token KSeF i hasło SMTP nie należą do tego pliku; klucze spoza poniższego schematu (np. `smtp.password`) powodują błąd.
 
+Domyślne wartości są wbudowane w aplikację (plik [src/main/resources/ksef-importer-defaults.yml](src/main/resources/ksef-importer-defaults.yml)): `importTime: "07:30"`, `ksef.environment: test`, `smtp.port: 587`. Każdy klucz z pliku profilu (`--config`) nadpisuje wartość domyślną; sekcje `ksef` i `smtp` są scalane pole po polu. Dane podmiotu i SMTP (`nip`, `startDate`, `recipientEmail`, `smtp.host`, `smtp.from`) muszą być w profilu.
+
 ```yaml
 nip: "1234563218"            # wymagane, NIP podmiotu: sprawdzany jest tylko format (10 cyfr), bez sumy kontrolnej, żeby wyłapać literówki
 importTime: "07:30"          # wymagane, format HH:mm
