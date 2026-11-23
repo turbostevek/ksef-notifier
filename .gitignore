@@ -38,3 +38,8 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### ksef-importer (lokalna konfiguracja i baza z danymi) ###
+ksef-importer.yml
+ksef-importer.yaml
+invoice-history.db
