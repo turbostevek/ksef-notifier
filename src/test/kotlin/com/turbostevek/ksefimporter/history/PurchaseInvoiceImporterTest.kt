@@ -28,7 +28,7 @@ class PurchaseInvoiceImporterTest {
     private val importer = PurchaseInvoiceImporter(source, notifier)
 
     @Test
-    fun `jeden zbiorczy mail zawiera wszystkie nowe faktury do zaplaty z przebiegu`() {
+    fun `jeden zbiorczy powiadomienie zawiera wszystkie nowe faktury do zaplaty z przebiegu`() {
         source.files = listOf(
             invoiceFile("A", buyerNip = TEST_NIP),
             invoiceFile("B", buyerNip = TEST_NIP),
@@ -40,7 +40,7 @@ class PurchaseInvoiceImporterTest {
     }
 
     @Test
-    fun `bez nowych faktur do zaplaty nie wysyla sie zaden mail`() {
+    fun `bez nowych faktur do zaplaty nie wysyla sie zadne powiadomienie`() {
         source.files = listOf(invoiceFile("PAID", buyerNip = TEST_NIP, platnosc = "<Zaplacono>1</Zaplacono>"))
 
         importer.importInvoices(config, token, historyPath)

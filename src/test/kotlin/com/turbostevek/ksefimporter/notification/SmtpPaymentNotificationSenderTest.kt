@@ -1,12 +1,33 @@
 package com.turbostevek.ksefimporter.notification
 
+import com.turbostevek.ksefimporter.config.ImportConfig
+import com.turbostevek.ksefimporter.config.KsefEnvironment
+import com.turbostevek.ksefimporter.config.Nip
+import com.turbostevek.ksefimporter.config.SmtpSettings
 import com.turbostevek.ksefimporter.history.PurchaseInvoice
+import com.turbostevek.ksefimporter.secrets.SecretName
+import com.turbostevek.ksefimporter.secrets.SecretStore
+import com.turbostevek.ksefimporter.secrets.SecretStoreException
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalTime
 
-class PaymentNotificationMessageTest {
+class SmtpPaymentNotificationSenderTest {
+
+    @Test
+    fun `bez hasla SMTP w magazynie sekretow wysylka konczy sie bledem przed polaczeniem`() {
+        val sender = SmtpPaymentNotificationSender(secrets = object : SecretStore {
+            override fun read(name: SecretName): String? = null
+        })
+        val config = config(smtpUsername = "user")
+
+        assertThrows(SecretStoreException::class.java) {
+            sender.send(config, listOf(invoice(dueDate = null)))
+        }
+    }
 
     @Test
     fun `faktura bez terminu platnosci jest oznaczona jako brak terminu`() {
@@ -35,6 +56,15 @@ class PaymentNotificationMessageTest {
             body.lines().filter { it.startsWith("- ") },
         )
     }
+
+    private fun config(smtpUsername: String?) = ImportConfig(
+        importTime = LocalTime.of(6, 0),
+        startDate = LocalDate.of(2026, 1, 1),
+        nip = Nip("9261051389"),
+        recipientEmail = "ksef@example.com",
+        ksefEnvironment = KsefEnvironment.TEST,
+        smtp = SmtpSettings(host = "smtp.example.com", port = 587, username = smtpUsername, from = "ksef@example.com"),
+    )
 
     private fun invoice(
         ksefNumber: String = "A",

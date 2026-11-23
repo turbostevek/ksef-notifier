@@ -36,6 +36,7 @@ class SmtpPaymentNotificationSender(private val secrets: SecretStore) : PaymentN
             host = smtp.host
             port = smtp.port
             javaMailProperties["mail.smtp.starttls.enable"] = "true"
+            javaMailProperties["mail.smtp.starttls.required"] = "true"
             smtp.username?.let { user ->
                 username = user
                 password = secrets.read(SecretName.SMTP_PASSWORD)
