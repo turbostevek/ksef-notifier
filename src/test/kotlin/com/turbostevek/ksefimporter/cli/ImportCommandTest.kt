@@ -1,6 +1,7 @@
 package com.turbostevek.ksefimporter.cli
 
 import com.turbostevek.ksefimporter.config.ImportConfig
+import com.turbostevek.ksefimporter.history.PaymentNotificationSender
 import com.turbostevek.ksefimporter.history.PurchaseInvoiceImporter
 import com.turbostevek.ksefimporter.ksef.InvoiceFile
 import com.turbostevek.ksefimporter.ksef.InvoiceSource
@@ -30,7 +31,7 @@ class ImportCommandTest {
     @TempDir
     lateinit var dir: Path
 
-    private val importService = PurchaseInvoiceImporter(KsefImportService(KsefClientFactory()))
+    private val importService = PurchaseInvoiceImporter(KsefImportService(KsefClientFactory()), PaymentNotificationSender { _, _ -> })
 
     private val originalOut = System.out
     private val originalErr = System.err
@@ -138,7 +139,7 @@ class ImportCommandTest {
         val failingService = PurchaseInvoiceImporter(object : InvoiceSource {
             override fun download(config: ImportConfig, token: KsefToken, from: Instant, to: Instant): List<InvoiceFile> =
                 throw IllegalStateException("awaria testowa")
-        })
+        }, PaymentNotificationSender { _, _ -> })
         val config = writeConfig(VALID_YAML)
 
         val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingService)

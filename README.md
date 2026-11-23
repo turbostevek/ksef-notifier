@@ -24,7 +24,9 @@ Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym maga
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 ```
 
-Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku. Powiadomienia e-mail są poza zakresem tego polecenia.
+Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku.
+
+Po imporcie wysyłany jest jeden zbiorczy e-mail na adres `recipientEmail` z fakturami zakupowymi do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) jest tylko logowany i nie zmienia kodu wyjścia; kolejny przebieg ponawia wysyłkę zaległych faktur.
 
 Kody wyjścia:
 
@@ -45,6 +47,11 @@ Token testowy (środowisko `test`) generuje osobna aplikacja `ksef-token-generat
   secret-tool store --label='KSeF token' service ksef-importer account ksef-token
   ```
 - Windows: Menedżer poświadczeń → Dane logowania systemu Windows → Dodaj poświadczenie ogólne, adres sieciowy `ksef-importer/ksef-token`, hasło = token.
+
+Hasło SMTP (potrzebne, gdy w `smtp` jest `username`) zapisujesz tak samo, pod nazwą `ksef-importer/smtp-password`:
+
+- Ubuntu: `secret-tool store --label='SMTP password' service ksef-importer account smtp-password`
+- Windows: poświadczenie ogólne o adresie sieciowym `ksef-importer/smtp-password`.
 
 Ręczne sprawdzenie przepływu uwierzytelniania na TEST (bez aplikacji): kolekcja Postman [docs/postman/ksef-test-auth.postman_collection.json](docs/postman/ksef-test-auth.postman_collection.json) i environment [docs/postman/ksef-test.postman_environment.json](docs/postman/ksef-test.postman_environment.json). W environment wklej token w pole `ksefToken` (nie commituj go), potem uruchom requesty 1 → 6 po kolei. Kolejność jest istotna: request 3 korzysta z certyfikatu z requestu 1 i challenge z requestu 2.
 

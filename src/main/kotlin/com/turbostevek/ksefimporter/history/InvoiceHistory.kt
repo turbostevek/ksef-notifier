@@ -65,6 +65,34 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             }
         }
 
+    /** Returns invoices to pay that have not been notified yet, including those left over from failed notifications. */
+    fun unnotifiedToPay(): List<PurchaseInvoice> =
+        connection.prepareStatement(SELECT_UNNOTIFIED_TO_PAY).use { statement ->
+            statement.executeQuery().use { rows ->
+                generateSequence { if (rows.next()) rows.toInvoice() else null }.toList()
+            }
+        }
+
+    /** Marks the invoices as notified. Call it only after the notification has been delivered. */
+    fun markNotified(ksefNumbers: List<String>) {
+        connection.autoCommit = false
+        try {
+            connection.prepareStatement("UPDATE invoice_history SET notified = 1 WHERE ksef_number = ?").use { statement ->
+                ksefNumbers.forEach { ksefNumber ->
+                    statement.setString(1, ksefNumber)
+                    statement.addBatch()
+                }
+                statement.executeBatch()
+            }
+            connection.commit()
+        } catch (e: Exception) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = true
+        }
+    }
+
     override fun close() {
         connection.close()
     }
@@ -128,6 +156,12 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         const val SELECT_INVOICES = """
             SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue
             FROM invoice_history
+            ORDER BY issue_date, ksef_number
+        """
+        const val SELECT_UNNOTIFIED_TO_PAY = """
+            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue
+            FROM invoice_history
+            WHERE notified = 0 AND paid_at_issue = 0
             ORDER BY issue_date, ksef_number
         """
     }

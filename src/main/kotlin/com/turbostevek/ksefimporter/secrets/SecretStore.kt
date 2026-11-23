@@ -7,7 +7,8 @@ interface SecretStore {
 }
 
 enum class SecretName(val account: String) {
-    KSEF_TOKEN("ksef-token");
+    KSEF_TOKEN("ksef-token"),
+    SMTP_PASSWORD("smtp-password");
 
     val qualifiedName: String
         get() = "$SECRET_SERVICE/$account"
