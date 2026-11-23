@@ -45,8 +45,8 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             }
         }
 
-    /** Stores the invoices that are not in the history yet and moves the import state to [importedUpTo]. Returns the number of added invoices. */
-    fun save(invoices: List<PurchaseInvoice>, importedUpTo: Instant, importedAt: Instant): Int {
+    /** Stores the invoices that are not in the history yet. Returns the number of added invoices. Does not move the import state; see [markImported]. */
+    fun save(invoices: List<PurchaseInvoice>, importedAt: Instant): Int {
         connection.autoCommit = false
         try {
             var added = 0
@@ -59,10 +59,6 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                     added += statement.executeUpdate()
                 }
             }
-            connection.prepareStatement(UPSERT_IMPORT_STATE).use { statement ->
-                statement.setString(1, importedUpTo.toString())
-                statement.executeUpdate()
-            }
             connection.commit()
             return added
         } catch (e: Exception) {
@@ -70,6 +66,14 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             throw e
         } finally {
             connection.autoCommit = true
+        }
+    }
+
+    /** Moves the import state to [importedUpTo], so the next import starts there. */
+    fun markImported(importedUpTo: Instant) {
+        connection.prepareStatement(UPSERT_IMPORT_STATE).use { statement ->
+            statement.setString(1, importedUpTo.toString())
+            statement.executeUpdate()
         }
     }
 

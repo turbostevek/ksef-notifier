@@ -9,6 +9,7 @@ import com.turbostevek.ksefimporter.ksef.KsefToken
 import com.turbostevek.ksefimporter.validConfigYaml
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -74,12 +75,25 @@ class PurchaseInvoiceImporterTest {
 
         notifier.failure = null
         val retry = importer.importInvoices(config, token, historyPath)
-        importer.importInvoices(config, token, historyPath)
 
         assertFalse(retry.notificationFailed)
 
         assertEquals(listOf(listOf("A")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
         assertTrue(InvoiceHistory(historyPath).use { it.unnotifiedToPay() }.isEmpty())
+    }
+
+    @Test
+    fun `bledna wysylka nie przesuwa daty ostatniego sukcesu, wiec kolejny przebieg startuje od tej samej granicy`() {
+        source.files = listOf(invoiceFile("A", buyerNip = TEST_NIP))
+        notifier.failure = IllegalStateException("SMTP niedostępny")
+
+        importer.importInvoices(config, token, historyPath)
+        assertNull(InvoiceHistory(historyPath).use { it.lastSuccessfulImport() })
+
+        notifier.failure = null
+        importer.importInvoices(config, token, historyPath)
+
+        assertEquals(listOf(config.importFrom(), config.importFrom()), source.windows.map { it.first })
     }
 
     @Test

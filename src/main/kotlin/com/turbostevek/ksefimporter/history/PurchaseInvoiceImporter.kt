@@ -13,8 +13,9 @@ data class ImportResult(val downloaded: Int, val added: Int, val notificationFai
 /**
  * Incremental import of purchase invoices into the local history. The first run starts at the configured start date,
  * later runs start where the last successful run ended. After the import, one batch notification is sent about
- * invoices to pay that were not notified yet. A failed notification does not roll back the import and is reported
- * in [ImportResult.notificationFailed]; the next run retries it.
+ * invoices to pay that were not notified yet. The import state moves only when the notification succeeds (or nothing
+ * needed sending), so a failed notification keeps the invoices and the window open: it is reported in
+ * [ImportResult.notificationFailed], and the next run re-downloads the window and retries the notification.
  */
 @Component
 class PurchaseInvoiceImporter(
@@ -31,8 +32,9 @@ class PurchaseInvoiceImporter(
             val purchases = source.download(config, token, from, now)
                 .map { Fa3InvoiceParser.parse(it.ksefNumber, it.xml) }
                 .filter { it.buyerNip == config.nip.value }
-            val added = history.save(purchases, importedUpTo = now, importedAt = now)
+            val added = history.save(purchases, importedAt = now)
             val notificationFailed = notifyAboutInvoicesToPay(config, history)
+            if (!notificationFailed) history.markImported(now)
             ImportResult(downloaded = purchases.size, added = added, notificationFailed = notificationFailed)
         }
 

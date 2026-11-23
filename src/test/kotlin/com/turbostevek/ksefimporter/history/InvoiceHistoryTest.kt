@@ -20,19 +20,20 @@ class InvoiceHistoryTest {
     @Test
     fun `ponowny zapis tej samej faktury nie tworzy duplikatu`() {
         InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
-            assertEquals(1, history.save(listOf(invoice("A")), importedUpTo, importedUpTo))
-            assertEquals(0, history.save(listOf(invoice("A")), importedUpTo, importedUpTo))
+            assertEquals(1, history.save(listOf(invoice("A")), importedUpTo))
+            assertEquals(0, history.save(listOf(invoice("A")), importedUpTo))
 
             assertEquals(listOf("A"), history.findAll().map { it.ksefNumber })
         }
     }
 
     @Test
-    fun `po zapisie importu granica okna jest zapamietana, a przed pierwszym importem brak`() {
+    fun `po oznaczeniu importu granica okna jest zapamietana, a przed pierwszym importem brak`() {
         InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
             assertNull(history.lastSuccessfulImport())
 
-            history.save(emptyList(), importedUpTo, importedUpTo)
+            history.save(emptyList(), importedUpTo)
+            history.markImported(importedUpTo)
 
             assertEquals(importedUpTo, history.lastSuccessfulImport())
         }
@@ -41,7 +42,7 @@ class InvoiceHistoryTest {
     @Test
     fun `faktura bez terminu zapisuje termin jako NULL`() {
         InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
-            history.save(listOf(invoice("A", dueDate = null)), importedUpTo, importedUpTo)
+            history.save(listOf(invoice("A", dueDate = null)), importedUpTo)
 
             assertNull(history.findAll().single().dueDate)
         }
@@ -50,7 +51,7 @@ class InvoiceHistoryTest {
     @Test
     fun `zapisuje walute, kwote brutto i flage oplacenia bez zaokraglen`() {
         InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
-            history.save(listOf(invoice("A", gross = "1234.50", currency = "EUR", paid = true)), importedUpTo, importedUpTo)
+            history.save(listOf(invoice("A", gross = "1234.50", currency = "EUR", paid = true)), importedUpTo)
 
             val stored = history.findAll().single()
             assertEquals(BigDecimal("1234.50"), stored.grossAmount)
@@ -69,7 +70,6 @@ class InvoiceHistoryTest {
                         payment = Payment(form = PaymentForm.Known(PaymentMethod.TRANSFER), bankAccount = "PL61109010140000071219812874", bankName = "PKO BP"),
                     ),
                 ),
-                importedUpTo,
                 importedUpTo,
             )
 
@@ -104,7 +104,7 @@ class InvoiceHistoryTest {
             assertEquals("OLD", old.ksefNumber)
             assertNull(old.seller.name)
 
-            history.save(listOf(invoice("NEW").copy(seller = Seller(name = "Firma"))), importedUpTo, importedUpTo)
+            history.save(listOf(invoice("NEW").copy(seller = Seller(name = "Firma"))), importedUpTo)
 
             assertEquals("Firma", history.findAll().single { it.ksefNumber == "NEW" }.seller.name)
         }
