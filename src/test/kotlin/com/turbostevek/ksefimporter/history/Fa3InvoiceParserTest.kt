@@ -79,6 +79,15 @@ class Fa3InvoiceParserTest {
     }
 
     @Test
+    fun `znak nowej linii w adresie zamienia na przecinek`() {
+        val xml = fa3Xml().toString(Charsets.UTF_8).replace("ul. Długa 1</AdresL1>", "ul. Długa 1\n  lok. 5</AdresL1>")
+
+        val invoice = Fa3InvoiceParser.parse(KSEF_NUMBER, xml.toByteArray(Charsets.UTF_8))
+
+        assertEquals("ul. Długa 1, lok. 5, 00-001 Warszawa, PL", invoice.sellerAddress)
+    }
+
+    @Test
     fun `mapuje kod formy platnosci FA(3) na nazwe`() {
         assertEquals("przelew", parse(platnosc = "<FormaPlatnosci>6</FormaPlatnosci>").paymentForm)
         assertEquals("gotówka", parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>").paymentForm)

@@ -48,7 +48,11 @@ object Fa3InvoiceParser {
                     text("Podmiot1", "Adres", "AdresL1"),
                     text("Podmiot1", "Adres", "AdresL2"),
                     text("Podmiot1", "Adres", "KodKraju"),
-                ).joinToString(", ").ifEmpty { null },
+                ).flatMap { it.lines() }
+                    .map { line -> line.trim().replace(Regex("\\s+"), " ") }
+                    .filter { it.isNotEmpty() }
+                    .joinToString(", ")
+                    .ifEmpty { null },
                 paymentForm = text("Fa", "Platnosc", "FormaPlatnosci")?.let { PAYMENT_FORMS[it] ?: it },
                 bankAccount = text("Fa", "Platnosc", "RachunekBankowy", "NrRB"),
                 bankName = text("Fa", "Platnosc", "RachunekBankowy", "NazwaBanku"),

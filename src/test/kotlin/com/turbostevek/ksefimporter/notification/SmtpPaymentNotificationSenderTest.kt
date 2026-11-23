@@ -31,39 +31,11 @@ class SmtpPaymentNotificationSenderTest {
     }
 
     @Test
-    fun `faktura bez terminu platnosci jest oznaczona jako brak terminu`() {
-        val body = paymentNotificationBody(listOf(invoice(dueDate = null)))
-
-        assertEquals(
-            "- 2026-03-10, nr KSeF A, 123.45 PLN, termin: brak terminu",
-            body.lines().first { it.startsWith("- ") },
-        )
-    }
-
-    @Test
-    fun `kazda faktura w osobnej linii z kwota, waluta i terminem`() {
-        val body = paymentNotificationBody(
-            listOf(
-                invoice("A", dueDate = LocalDate.of(2026, 4, 1)),
-                invoice("B", dueDate = null, gross = "10.00"),
-            ),
-        )
-
-        assertEquals(
-            listOf(
-                "- 2026-03-10, nr KSeF A, 123.45 PLN, termin: 2026-04-01",
-                "- 2026-03-10, nr KSeF B, 10.00 PLN, termin: brak terminu",
-            ),
-            body.lines().filter { it.startsWith("- ") },
-        )
-    }
-
-    @Test
-    fun `mail zawiera nazwe, adres i forme platnosci wystawcy bez jego NIP`() {
+    fun `wiersz tabeli ma pola w kolejności data, numer KSeF, sprzedawca, adres, forma, rachunek, kwota, termin`() {
         val body = paymentNotificationBody(
             listOf(
                 invoice(
-                    dueDate = null,
+                    dueDate = LocalDate.of(2026, 4, 1),
                     sellerName = "Firma Sp. z o.o.",
                     sellerAddress = "ul. Długa 1, 00-001 Warszawa, PL",
                     paymentForm = "przelew",
@@ -75,23 +47,48 @@ class SmtpPaymentNotificationSenderTest {
 
         assertEquals(
             listOf(
-                "  wystawca: Firma Sp. z o.o., ul. Długa 1, 00-001 Warszawa, PL",
-                "  płatność: przelew, rachunek PL61109010140000071219812874 (PKO BP)",
+                listOf(
+                    "2026-03-10", "A", "Firma Sp. z o.o.", "ul. Długa 1, 00-001 Warszawa, PL", "przelew",
+                    "PL61109010140000071219812874 (PKO BP)", "123.45 PLN", "2026-04-01",
+                ),
             ),
-            body.lines().filter { it.startsWith("  ") },
+            rows(body),
         )
-        assertFalse(body.contains("5342191158"))
     }
 
     @Test
-    fun `brak rachunku bankowego nie dodaje informacji o rachunku`() {
+    fun `faktura bez rachunku ma puste pole rachunku, a bez terminu brak terminu`() {
+        val body = paymentNotificationBody(listOf(invoice(dueDate = null, paymentForm = "gotówka")))
+
+        assertEquals("", rows(body).single()[5])
+        assertEquals("brak terminu", rows(body).single()[7])
+    }
+
+    @Test
+    fun `kazda faktura ma osobny wiersz po naglowku`() {
         val body = paymentNotificationBody(
-            listOf(invoice(dueDate = null, paymentForm = "gotówka")),
+            listOf(
+                invoice("A", dueDate = LocalDate.of(2026, 4, 1)),
+                invoice("B", dueDate = null, gross = "10.00"),
+            ),
         )
 
-        assertEquals("  płatność: gotówka", body.lines().first { it.startsWith("  płatność") })
-        assertFalse(body.contains("rachunek"))
+        assertEquals(listOf("A", "B"), rows(body).map { it[1] })
+        assertEquals(listOf("123.45 PLN", "10.00 PLN"), rows(body).map { it[6] })
     }
+
+    @Test
+    fun `mail nie zawiera NIP wystawcy, a tresc jest escapowana w HTML`() {
+        val body = paymentNotificationBody(listOf(invoice(dueDate = null, sellerName = "A&B <x>")))
+
+        assertEquals("A&amp;B &lt;x&gt;", rows(body).single()[2])
+        assertFalse(body.contains("5342191158"))
+    }
+
+    private fun rows(body: String): List<List<String>> =
+        body.split("</tr>")
+            .filter { "<td>" in it }
+            .map { row -> Regex("<td>(.*?)</td>").findAll(row).map { it.groupValues[1] }.toList() }
 
     private fun config(smtpUsername: String?) = ImportConfig(
         importTime = LocalTime.of(6, 0),

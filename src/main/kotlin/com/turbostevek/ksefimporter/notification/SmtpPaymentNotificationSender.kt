@@ -6,8 +6,8 @@ import com.turbostevek.ksefimporter.history.PurchaseInvoice
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
-import org.springframework.mail.SimpleMailMessage
 import org.springframework.mail.javamail.JavaMailSenderImpl
+import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Component
 
 internal fun paymentNotificationSubject(invoiceCount: Int): String =
@@ -15,27 +15,48 @@ internal fun paymentNotificationSubject(invoiceCount: Int): String =
 
 internal fun paymentNotificationBody(invoices: List<PurchaseInvoice>): String =
     buildString {
-        appendLine("Nowe faktury zakupowe do zapłaty:")
-        appendLine()
+        append("<p>Nowe faktury zakupowe do zapłaty:</p>")
+        append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">")
+        append("<tr>")
+        PAYMENT_TABLE_HEADERS.forEach { append("<th>${escapeHtml(it)}</th>") }
+        append("</tr>")
         invoices.forEach { invoice ->
-            appendLine(invoiceLine(invoice))
-            appendLine("  wystawca: ${invoice.sellerName ?: "brak danych"}, ${invoice.sellerAddress ?: "brak adresu"}")
-            appendLine("  płatność: ${paymentDetails(invoice)}")
+            append("<tr>")
+            paymentRowCells(invoice).forEach { append("<td>${escapeHtml(it)}</td>") }
+            append("</tr>")
         }
-    }.trimEnd()
+        append("</table>")
+    }
 
-private fun invoiceLine(invoice: PurchaseInvoice): String {
-    val dueDate = invoice.dueDate?.toString() ?: "brak terminu"
-    return "- ${invoice.issueDate}, nr KSeF ${invoice.ksefNumber}, " +
-        "${invoice.grossAmount.toPlainString()} ${invoice.currency}, termin: $dueDate"
+private val PAYMENT_TABLE_HEADERS = listOf(
+    "Data wystawienia",
+    "Numer KSeF",
+    "Sprzedawca",
+    "Adres",
+    "Forma płatności",
+    "Numer rachunku",
+    "Kwota do zapłaty",
+    "Termin płatności",
+)
+
+private fun paymentRowCells(invoice: PurchaseInvoice): List<String> = listOf(
+    invoice.issueDate.toString(),
+    invoice.ksefNumber,
+    invoice.sellerName ?: "brak danych",
+    invoice.sellerAddress ?: "brak danych",
+    invoice.paymentForm ?: "brak danych",
+    bankAccountCell(invoice),
+    "${invoice.grossAmount.toPlainString()} ${invoice.currency}",
+    invoice.dueDate?.toString() ?: "brak terminu",
+)
+
+private fun bankAccountCell(invoice: PurchaseInvoice): String {
+    val account = invoice.bankAccount ?: return ""
+    return invoice.bankName?.let { "$account ($it)" } ?: account
 }
 
-private fun paymentDetails(invoice: PurchaseInvoice): String {
-    val form = invoice.paymentForm ?: "brak danych"
-    val account = invoice.bankAccount ?: return form
-    val bank = invoice.bankName?.let { " ($it)" } ?: ""
-    return "$form, rachunek $account$bank"
-}
+private fun escapeHtml(text: String): String =
+    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
 /** Sends the batch notification through the SMTP server from the configuration. The password comes from the secret store. */
 @Component
@@ -55,13 +76,13 @@ class SmtpPaymentNotificationSender(private val secrets: SecretStore) : PaymentN
                 javaMailProperties["mail.smtp.auth"] = "true"
             }
         }
-        mailSender.send(
-            SimpleMailMessage().apply {
-                from = smtp.from
-                setTo(config.recipientEmail)
-                subject = paymentNotificationSubject(invoices.size)
-                text = paymentNotificationBody(invoices)
-            },
-        )
+        val message = mailSender.createMimeMessage()
+        MimeMessageHelper(message, false, Charsets.UTF_8.name()).apply {
+            setFrom(smtp.from)
+            setTo(config.recipientEmail)
+            setSubject(paymentNotificationSubject(invoices.size))
+            setText(paymentNotificationBody(invoices), true)
+        }
+        mailSender.send(message)
     }
 }
