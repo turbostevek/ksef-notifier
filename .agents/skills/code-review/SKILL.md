@@ -77,7 +77,9 @@ If the spec is missing, skip the Spec sub-agent and note this in the final repor
 
 Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
+**Numbering.** Every finding gets one ID from a single sequence shared by all axes and any other finding source: `#1`, `#2`, `#3`, … Assign IDs in report order (Standards first, then Spec, then any other source), so the same finding always keeps the same number within one review. Each finding starts with its ID and a tag for its source, for example `**#4 [Spec]** …`. Use the same ID when referring back to a finding in later turns. The numbering is for reference only and does not rank findings.
+
+End with a one-line summary: total findings per axis, the ID range per axis, and the worst issue _within each axis_ (if any), cited by ID. Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 
 ## Why two axes
 
