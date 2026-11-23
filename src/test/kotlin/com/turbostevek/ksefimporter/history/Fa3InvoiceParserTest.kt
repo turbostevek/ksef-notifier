@@ -74,8 +74,8 @@ class Fa3InvoiceParserTest {
     fun `odczytuje nazwe i adres sprzedawcy w jednej linii`() {
         val invoice = parse()
 
-        assertEquals("Sprzedawca Sp. z o.o.", invoice.sellerName)
-        assertEquals("ul. Długa 1, 00-001 Warszawa, PL", invoice.sellerAddress)
+        assertEquals("Sprzedawca Sp. z o.o.", invoice.seller.name)
+        assertEquals("ul. Długa 1, 00-001 Warszawa, PL", invoice.seller.address)
     }
 
     @Test
@@ -84,18 +84,18 @@ class Fa3InvoiceParserTest {
 
         val invoice = Fa3InvoiceParser.parse(KSEF_NUMBER, xml.toByteArray(Charsets.UTF_8))
 
-        assertEquals("ul. Długa 1, lok. 5, 00-001 Warszawa, PL", invoice.sellerAddress)
+        assertEquals("ul. Długa 1, lok. 5, 00-001 Warszawa, PL", invoice.seller.address)
     }
 
     @Test
     fun `mapuje kod formy platnosci FA(3) na nazwe`() {
-        assertEquals("przelew", parse(platnosc = "<FormaPlatnosci>6</FormaPlatnosci>").paymentForm)
-        assertEquals("gotówka", parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>").paymentForm)
+        assertEquals(PaymentForm.Known(PaymentMethod.TRANSFER), parse(platnosc = "<FormaPlatnosci>6</FormaPlatnosci>").payment.form)
+        assertEquals(PaymentForm.Known(PaymentMethod.CASH), parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>").payment.form)
     }
 
     @Test
-    fun `nieznany kod formy platnosci zapisuje kod bez zmian`() {
-        assertEquals("9", parse(platnosc = "<FormaPlatnosci>9</FormaPlatnosci>").paymentForm)
+    fun `nieznany kod formy platnosci trafia do typu Unknown z zachowanym kodem`() {
+        assertEquals(PaymentForm.Unknown("9"), parse(platnosc = "<FormaPlatnosci>9</FormaPlatnosci>").payment.form)
     }
 
     @Test
@@ -104,16 +104,16 @@ class Fa3InvoiceParserTest {
             platnosc = "<RachunekBankowy><NrRB>PL61109010140000071219812874</NrRB><NazwaBanku>PKO BP</NazwaBanku></RachunekBankowy>",
         )
 
-        assertEquals("PL61109010140000071219812874", invoice.bankAccount)
-        assertEquals("PKO BP", invoice.bankName)
+        assertEquals("PL61109010140000071219812874", invoice.payment.bankAccount)
+        assertEquals("PKO BP", invoice.payment.bankName)
     }
 
     @Test
     fun `bez rachunku bankowego pola rachunku sa puste`() {
         val invoice = parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>")
 
-        assertNull(invoice.bankAccount)
-        assertNull(invoice.bankName)
+        assertNull(invoice.payment.bankAccount)
+        assertNull(invoice.payment.bankName)
     }
 
     @Test

@@ -65,11 +65,8 @@ class InvoiceHistoryTest {
             history.save(
                 listOf(
                     invoice("A").copy(
-                        sellerName = "Firma",
-                        sellerAddress = "ul. Długa 1, Warszawa",
-                        paymentForm = "przelew",
-                        bankAccount = "PL61109010140000071219812874",
-                        bankName = "PKO BP",
+                        seller = Seller(name = "Firma", address = "ul. Długa 1, Warszawa"),
+                        payment = Payment(form = PaymentForm.Known(PaymentMethod.TRANSFER), bankAccount = "PL61109010140000071219812874", bankName = "PKO BP"),
                     ),
                 ),
                 importedUpTo,
@@ -77,11 +74,8 @@ class InvoiceHistoryTest {
             )
 
             val stored = history.findAll().single()
-            assertEquals("Firma", stored.sellerName)
-            assertEquals("ul. Długa 1, Warszawa", stored.sellerAddress)
-            assertEquals("przelew", stored.paymentForm)
-            assertEquals("PL61109010140000071219812874", stored.bankAccount)
-            assertEquals("PKO BP", stored.bankName)
+            assertEquals(Seller(name = "Firma", address = "ul. Długa 1, Warszawa"), stored.seller)
+            assertEquals(Payment(form = PaymentForm.Known(PaymentMethod.TRANSFER), bankAccount = "PL61109010140000071219812874", bankName = "PKO BP"), stored.payment)
         }
     }
 
@@ -108,11 +102,11 @@ class InvoiceHistoryTest {
         InvoiceHistory(path).use { history ->
             val old = history.findAll().single()
             assertEquals("OLD", old.ksefNumber)
-            assertNull(old.sellerName)
+            assertNull(old.seller.name)
 
-            history.save(listOf(invoice("NEW").copy(sellerName = "Firma")), importedUpTo, importedUpTo)
+            history.save(listOf(invoice("NEW").copy(seller = Seller(name = "Firma"))), importedUpTo, importedUpTo)
 
-            assertEquals("Firma", history.findAll().single { it.ksefNumber == "NEW" }.sellerName)
+            assertEquals("Firma", history.findAll().single { it.ksefNumber == "NEW" }.seller.name)
         }
     }
 

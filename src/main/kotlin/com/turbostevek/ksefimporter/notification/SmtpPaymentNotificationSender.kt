@@ -13,51 +13,6 @@ import org.springframework.stereotype.Component
 internal fun paymentNotificationSubject(invoiceCount: Int): String =
     "KSeF: faktury do zapłaty ($invoiceCount)"
 
-internal fun paymentNotificationBody(invoices: List<PurchaseInvoice>): String =
-    buildString {
-        append("<p>Nowe faktury zakupowe do zapłaty:</p>")
-        append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">")
-        append("<tr>")
-        PAYMENT_TABLE_HEADERS.forEach { append("<th>${escapeHtml(it)}</th>") }
-        append("</tr>")
-        invoices.forEach { invoice ->
-            append("<tr>")
-            paymentRowCells(invoice).forEach { append("<td>${escapeHtml(it)}</td>") }
-            append("</tr>")
-        }
-        append("</table>")
-    }
-
-private val PAYMENT_TABLE_HEADERS = listOf(
-    "Data wystawienia",
-    "Numer KSeF",
-    "Sprzedawca",
-    "Adres",
-    "Forma płatności",
-    "Numer rachunku",
-    "Kwota do zapłaty",
-    "Termin płatności",
-)
-
-private fun paymentRowCells(invoice: PurchaseInvoice): List<String> = listOf(
-    invoice.issueDate.toString(),
-    invoice.ksefNumber,
-    invoice.sellerName ?: "brak danych",
-    invoice.sellerAddress ?: "brak danych",
-    invoice.paymentForm ?: "brak danych",
-    bankAccountCell(invoice),
-    "${invoice.grossAmount.toPlainString()} ${invoice.currency}",
-    invoice.dueDate?.toString() ?: "brak terminu",
-)
-
-private fun bankAccountCell(invoice: PurchaseInvoice): String {
-    val account = invoice.bankAccount ?: return ""
-    return invoice.bankName?.let { "$account ($it)" } ?: account
-}
-
-private fun escapeHtml(text: String): String =
-    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-
 /** Sends the batch notification through the SMTP server from the configuration. The password comes from the secret store. */
 @Component
 class SmtpPaymentNotificationSender(private val secrets: SecretStore) : PaymentNotificationSender {
@@ -81,7 +36,7 @@ class SmtpPaymentNotificationSender(private val secrets: SecretStore) : PaymentN
             setFrom(smtp.from)
             setTo(config.recipientEmail)
             setSubject(paymentNotificationSubject(invoices.size))
-            setText(paymentNotificationBody(invoices), true)
+            setText(PaymentNotificationHtml.render(invoices), true)
         }
         mailSender.send(message)
     }

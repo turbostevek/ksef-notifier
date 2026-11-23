@@ -41,7 +41,7 @@ Lokalny zapis zaimportowanych faktur wraz z informacją, czy dla każdej z nich 
 _Avoid_: Archiwum, baza faktur
 
 **Powiadomienie**:
-Zbiorcza wiadomość email wysyłana po Imporcie, zawierająca nowe Faktury do zapłaty. Jedno Powiadomienie na uruchomienie, co najwyżej jedno na dobę. Brak nowych faktur do zapłaty oznacza brak Powiadomienia.
+Zbiorcza wiadomość email wysyłana po Imporcie, zawierająca nowe Faktury do zapłaty. Aplikacja wysyła jedno Powiadomienie na przebieg, jeśli są faktury do zapłaty, które nie zostały jeszcze powiadomione. Częstotliwość wysyłki kontroluje zewnętrzny harmonogram, a nie aplikacja; ręczne uruchomienie też może wysłać Powiadomienie. Faktury już oznaczone jako powiadomione nigdy nie są wysyłane ponownie. Brak nowych faktur do zapłaty oznacza brak Powiadomienia.
 _Avoid_: Alert, przypomnienie, mail na fakturę
 
 ## Relacje

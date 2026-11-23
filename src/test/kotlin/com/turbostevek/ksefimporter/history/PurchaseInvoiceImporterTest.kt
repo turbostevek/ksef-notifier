@@ -28,7 +28,7 @@ class PurchaseInvoiceImporterTest {
     private val importer = PurchaseInvoiceImporter(source, notifier)
 
     @Test
-    fun `jeden zbiorczy powiadomienie zawiera wszystkie nowe faktury do zaplaty z przebiegu`() {
+    fun `jedno zbiorcze powiadomienie zawiera wszystkie nowe faktury do zaplaty z przebiegu`() {
         source.files = listOf(
             invoiceFile("A", buyerNip = TEST_NIP),
             invoiceFile("B", buyerNip = TEST_NIP),
@@ -68,12 +68,14 @@ class PurchaseInvoiceImporterTest {
         val first = importer.importInvoices(config, token, historyPath)
         assertEquals(1, first.added)
         assertTrue(notifier.sent.isEmpty())
+        assertEquals(listOf("A"), InvoiceHistory(historyPath).use { it.unnotifiedToPay().map { invoice -> invoice.ksefNumber } })
 
         notifier.failure = null
         importer.importInvoices(config, token, historyPath)
         importer.importInvoices(config, token, historyPath)
 
         assertEquals(listOf(listOf("A")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
+        assertTrue(InvoiceHistory(historyPath).use { it.unnotifiedToPay() }.isEmpty())
     }
 
     @Test

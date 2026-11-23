@@ -4,7 +4,11 @@ import com.turbostevek.ksefimporter.config.ImportConfig
 import com.turbostevek.ksefimporter.config.KsefEnvironment
 import com.turbostevek.ksefimporter.config.Nip
 import com.turbostevek.ksefimporter.config.SmtpSettings
+import com.turbostevek.ksefimporter.history.Payment
+import com.turbostevek.ksefimporter.history.PaymentForm
+import com.turbostevek.ksefimporter.history.PaymentMethod
 import com.turbostevek.ksefimporter.history.PurchaseInvoice
+import com.turbostevek.ksefimporter.history.Seller
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
@@ -32,13 +36,13 @@ class SmtpPaymentNotificationSenderTest {
 
     @Test
     fun `wiersz tabeli ma pola w kolejności data, numer KSeF, sprzedawca, adres, forma, rachunek, kwota, termin`() {
-        val body = paymentNotificationBody(
+        val body = PaymentNotificationHtml.render(
             listOf(
                 invoice(
                     dueDate = LocalDate.of(2026, 4, 1),
                     sellerName = "Firma Sp. z o.o.",
                     sellerAddress = "ul. Długa 1, 00-001 Warszawa, PL",
-                    paymentForm = "przelew",
+                    paymentForm = PaymentForm.Known(PaymentMethod.TRANSFER),
                     bankAccount = "PL61109010140000071219812874",
                     bankName = "PKO BP",
                 ),
@@ -58,7 +62,7 @@ class SmtpPaymentNotificationSenderTest {
 
     @Test
     fun `faktura bez rachunku ma puste pole rachunku, a bez terminu brak terminu`() {
-        val body = paymentNotificationBody(listOf(invoice(dueDate = null, paymentForm = "gotówka")))
+        val body = PaymentNotificationHtml.render(listOf(invoice(dueDate = null, paymentForm = PaymentForm.Known(PaymentMethod.CASH))))
 
         assertEquals("", rows(body).single()[5])
         assertEquals("brak terminu", rows(body).single()[7])
@@ -66,7 +70,7 @@ class SmtpPaymentNotificationSenderTest {
 
     @Test
     fun `kazda faktura ma osobny wiersz po naglowku`() {
-        val body = paymentNotificationBody(
+        val body = PaymentNotificationHtml.render(
             listOf(
                 invoice("A", dueDate = LocalDate.of(2026, 4, 1)),
                 invoice("B", dueDate = null, gross = "10.00"),
@@ -79,10 +83,17 @@ class SmtpPaymentNotificationSenderTest {
 
     @Test
     fun `mail nie zawiera NIP wystawcy, a tresc jest escapowana w HTML`() {
-        val body = paymentNotificationBody(listOf(invoice(dueDate = null, sellerName = "A&B <x>")))
+        val body = PaymentNotificationHtml.render(listOf(invoice(dueDate = null, sellerName = "A&B <x>")))
 
         assertEquals("A&amp;B &lt;x&gt;", rows(body).single()[2])
-        assertFalse(body.contains("5342191158"))
+        assertFalse(body.contains("1234567890"))
+    }
+
+    @Test
+    fun `nieznana forma platnosci pokazuje kod, a nie etykiete`() {
+        val body = PaymentNotificationHtml.render(listOf(invoice(dueDate = null, paymentForm = PaymentForm.Unknown("8"))))
+
+        assertEquals("nieznana (kod 8)", rows(body).single()[4])
     }
 
     private fun rows(body: String): List<List<String>> =
@@ -105,22 +116,19 @@ class SmtpPaymentNotificationSenderTest {
         gross: String = "123.45",
         sellerName: String? = null,
         sellerAddress: String? = null,
-        paymentForm: String? = null,
+        paymentForm: PaymentForm? = null,
         bankAccount: String? = null,
         bankName: String? = null,
     ) = PurchaseInvoice(
         ksefNumber = ksefNumber,
-        sellerNip = "5342191158",
+        sellerNip = "1234567890",
         buyerNip = "9261051389",
         issueDate = LocalDate.of(2026, 3, 10),
         dueDate = dueDate,
         grossAmount = BigDecimal(gross),
         currency = "PLN",
         paidAtIssue = false,
-        sellerName = sellerName,
-        sellerAddress = sellerAddress,
-        paymentForm = paymentForm,
-        bankAccount = bankAccount,
-        bankName = bankName,
+        seller = Seller(name = sellerName, address = sellerAddress),
+        payment = Payment(form = paymentForm, bankAccount = bankAccount, bankName = bankName),
     )
 }

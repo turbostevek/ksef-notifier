@@ -73,16 +73,13 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         }
     }
 
-    fun findAll(): List<PurchaseInvoice> =
-        connection.prepareStatement(SELECT_INVOICES).use { statement ->
-            statement.executeQuery().use { rows ->
-                generateSequence { if (rows.next()) rows.toInvoice() else null }.toList()
-            }
-        }
+    fun findAll(): List<PurchaseInvoice> = queryInvoices("")
 
     /** Returns invoices to pay that have not been notified yet, including those left over from failed notifications. */
-    fun unnotifiedToPay(): List<PurchaseInvoice> =
-        connection.prepareStatement(SELECT_UNNOTIFIED_TO_PAY).use { statement ->
+    fun unnotifiedToPay(): List<PurchaseInvoice> = queryInvoices("WHERE notified = 0 AND paid_at_issue = 0")
+
+    private fun queryInvoices(whereClause: String): List<PurchaseInvoice> =
+        connection.prepareStatement("SELECT $SELECT_COLUMNS FROM invoice_history $whereClause ORDER BY issue_date, ksef_number").use { statement ->
             statement.executeQuery().use { rows ->
                 generateSequence { if (rows.next()) rows.toInvoice() else null }.toList()
             }
@@ -121,11 +118,11 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         "gross_amount" to grossAmount.toPlainString(),
         "currency" to currency,
         "paid_at_issue" to if (paidAtIssue) 1 else 0,
-        "seller_name" to sellerName,
-        "seller_address" to sellerAddress,
-        "payment_form" to paymentForm,
-        "bank_account" to bankAccount,
-        "bank_name" to bankName,
+        "seller_name" to seller.name,
+        "seller_address" to seller.address,
+        "payment_form" to payment.form?.code,
+        "bank_account" to payment.bankAccount,
+        "bank_name" to payment.bankName,
         "imported_at" to importedAt.toString(),
     )
 
@@ -142,11 +139,15 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         grossAmount = BigDecimal(getString("gross_amount")),
         currency = getString("currency"),
         paidAtIssue = getInt("paid_at_issue") == 1,
-        sellerName = getString("seller_name"),
-        sellerAddress = getString("seller_address"),
-        paymentForm = getString("payment_form"),
-        bankAccount = getString("bank_account"),
-        bankName = getString("bank_name"),
+        seller = Seller(
+            name = getString("seller_name"),
+            address = getString("seller_address"),
+        ),
+        payment = Payment(
+            form = getString("payment_form")?.let(PaymentForm::fromCode),
+            bankAccount = getString("bank_account"),
+            bankName = getString("bank_name"),
+        ),
     )
 
     private companion object {
@@ -184,18 +185,9 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             INSERT INTO import_state (id, last_imported_to) VALUES (1, ?)
             ON CONFLICT (id) DO UPDATE SET last_imported_to = excluded.last_imported_to
         """
-        const val SELECT_INVOICES = """
-            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
+        const val SELECT_COLUMNS = """
+            ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
                 seller_name, seller_address, payment_form, bank_account, bank_name
-            FROM invoice_history
-            ORDER BY issue_date, ksef_number
-        """
-        const val SELECT_UNNOTIFIED_TO_PAY = """
-            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
-                seller_name, seller_address, payment_form, bank_account, bank_name
-            FROM invoice_history
-            WHERE notified = 0 AND paid_at_issue = 0
-            ORDER BY issue_date, ksef_number
         """
     }
 }
