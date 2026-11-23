@@ -24,7 +24,9 @@ Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym maga
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 ```
 
-Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku. Powiadomienia e-mail są poza zakresem tego polecenia.
+Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku.
+
+Po imporcie wysyłany jest jeden zbiorczy e-mail HTML na adres `recipientEmail` z tabelą faktur zakupowych do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Kolumny w stałej kolejności: data wystawienia, numer KSeF, sprzedawca, adres, forma płatności, rachunek, kwota, termin płatności. W tabeli e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) jest tylko logowany i nie zmienia kodu wyjścia; kolejny przebieg ponawia wysyłkę zaległych faktur.
 
 Kody wyjścia:
 
@@ -46,11 +48,18 @@ Token testowy (środowisko `test`) generuje osobna aplikacja `ksef-token-generat
   ```
 - Windows: Menedżer poświadczeń → Dane logowania systemu Windows → Dodaj poświadczenie ogólne, adres sieciowy `ksef-importer/ksef-token`, hasło = token.
 
+Hasło SMTP (potrzebne, gdy w `smtp` jest `username`) zapisujesz tak samo, pod nazwą `ksef-importer/smtp-password`:
+
+- Ubuntu: `secret-tool store --label='SMTP password' service ksef-importer account smtp-password`
+- Windows: poświadczenie ogólne o adresie sieciowym `ksef-importer/smtp-password`.
+
 Ręczne sprawdzenie przepływu uwierzytelniania na TEST (bez aplikacji): kolekcja Postman [docs/postman/ksef-test-auth.postman_collection.json](docs/postman/ksef-test-auth.postman_collection.json) i environment [docs/postman/ksef-test.postman_environment.json](docs/postman/ksef-test.postman_environment.json). W environment wklej token w pole `ksefToken` (nie commituj go), potem uruchom requesty 1 → 6 po kolei. Kolejność jest istotna: request 3 korzysta z certyfikatu z requestu 1 i challenge z requestu 2.
 
 ## Konfiguracja
 
 Plik YAML bez sekretów. Token KSeF i hasło SMTP nie należą do tego pliku; klucze spoza poniższego schematu (np. `smtp.password`) powodują błąd.
+
+Domyślne wartości są wbudowane w aplikację (plik [src/main/resources/ksef-importer-defaults.yml](src/main/resources/ksef-importer-defaults.yml)): `importTime: "07:30"`, `ksef.environment: test`, `smtp.port: 587`. Każdy klucz z pliku profilu (`--config`) nadpisuje wartość domyślną; sekcje `ksef` i `smtp` są scalane pole po polu. Dane podmiotu i SMTP (`nip`, `startDate`, `recipientEmail`, `smtp.host`, `smtp.from`) muszą być w profilu.
 
 ```yaml
 nip: "1234563218"            # wymagane, NIP podmiotu: sprawdzany jest tylko format (10 cyfr), bez sumy kontrolnej, żeby wyłapać literówki

@@ -20,6 +20,21 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             statement.executeUpdate(CREATE_INVOICES)
             statement.executeUpdate(CREATE_IMPORT_STATE)
         }
+        addColumnsMissingFromOlderSchema()
+    }
+
+    /** Databases created before the seller and payment columns existed get them added; old rows keep NULL there. */
+    private fun addColumnsMissingFromOlderSchema() {
+        val existing = connection.createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info(invoice_history)").use { rows ->
+                generateSequence { if (rows.next()) rows.getString("name") else null }.toSet()
+            }
+        }
+        connection.createStatement().use { statement ->
+            NEW_COLUMNS.filter { it !in existing }.forEach { column ->
+                statement.executeUpdate("ALTER TABLE invoice_history ADD COLUMN $column TEXT")
+            }
+        }
     }
 
     /** Returns the end of the window of the last successful import, or null if no import has run yet. */
@@ -58,12 +73,37 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         }
     }
 
-    fun findAll(): List<PurchaseInvoice> =
-        connection.prepareStatement(SELECT_INVOICES).use { statement ->
+    fun findAll(): List<PurchaseInvoice> = queryInvoices("")
+
+    /** Returns invoices to pay that have not been notified yet, including those left over from failed notifications. */
+    fun unnotifiedToPay(): List<PurchaseInvoice> = queryInvoices("WHERE notified = 0 AND paid_at_issue = 0")
+
+    private fun queryInvoices(whereClause: String): List<PurchaseInvoice> =
+        connection.prepareStatement("SELECT $SELECT_COLUMNS FROM invoice_history $whereClause ORDER BY issue_date, ksef_number").use { statement ->
             statement.executeQuery().use { rows ->
                 generateSequence { if (rows.next()) rows.toInvoice() else null }.toList()
             }
         }
+
+    /** Marks the invoices as notified. Call it only after the notification has been delivered. */
+    fun markNotified(ksefNumbers: List<String>) {
+        connection.autoCommit = false
+        try {
+            connection.prepareStatement("UPDATE invoice_history SET notified = 1 WHERE ksef_number = ?").use { statement ->
+                ksefNumbers.forEach { ksefNumber ->
+                    statement.setString(1, ksefNumber)
+                    statement.addBatch()
+                }
+                statement.executeBatch()
+            }
+            connection.commit()
+        } catch (e: Exception) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = true
+        }
+    }
 
     override fun close() {
         connection.close()
@@ -78,6 +118,11 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         "gross_amount" to grossAmount.toPlainString(),
         "currency" to currency,
         "paid_at_issue" to if (paidAtIssue) 1 else 0,
+        "seller_name" to seller.name,
+        "seller_address" to seller.address,
+        "payment_form" to payment.form?.code,
+        "bank_account" to payment.bankAccount,
+        "bank_name" to payment.bankName,
         "imported_at" to importedAt.toString(),
     )
 
@@ -94,6 +139,15 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         grossAmount = BigDecimal(getString("gross_amount")),
         currency = getString("currency"),
         paidAtIssue = getInt("paid_at_issue") == 1,
+        seller = Seller(
+            name = getString("seller_name"),
+            address = getString("seller_address"),
+        ),
+        payment = Payment(
+            form = getString("payment_form")?.let(PaymentForm::fromCode),
+            bankAccount = getString("bank_account"),
+            bankName = getString("bank_name"),
+        ),
     )
 
     private companion object {
@@ -108,7 +162,12 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                 currency TEXT NOT NULL,
                 paid_at_issue INTEGER NOT NULL,
                 notified INTEGER NOT NULL DEFAULT 0,
-                imported_at TEXT NOT NULL
+                imported_at TEXT NOT NULL,
+                seller_name TEXT,
+                seller_address TEXT,
+                payment_form TEXT,
+                bank_account TEXT,
+                bank_name TEXT
             )
         """
         const val CREATE_IMPORT_STATE = """
@@ -117,18 +176,18 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                 last_imported_to TEXT NOT NULL
             )
         """
+        val NEW_COLUMNS = listOf("seller_name", "seller_address", "payment_form", "bank_account", "bank_name")
         val INSERT_COLUMNS = listOf(
             "ksef_number", "seller_nip", "buyer_nip", "issue_date", "due_date",
             "gross_amount", "currency", "paid_at_issue", "imported_at",
-        )
+        ) + NEW_COLUMNS
         const val UPSERT_IMPORT_STATE = """
             INSERT INTO import_state (id, last_imported_to) VALUES (1, ?)
             ON CONFLICT (id) DO UPDATE SET last_imported_to = excluded.last_imported_to
         """
-        const val SELECT_INVOICES = """
-            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue
-            FROM invoice_history
-            ORDER BY issue_date, ksef_number
+        const val SELECT_COLUMNS = """
+            ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
+                seller_name, seller_address, payment_form, bank_account, bank_name
         """
     }
 }

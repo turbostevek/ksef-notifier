@@ -1,0 +1,7 @@
+# Domyślna konfiguracja wbudowana w aplikację. Klucze z pliku profilu (--config) nadpisują te wartości.
+# Dane podmiotu i SMTP (nip, startDate, recipientEmail, smtp.host, smtp.from) należą wyłącznie do profilu.
+importTime: "07:30"
+ksef:
+  environment: test
+smtp:
+  port: 587

@@ -43,6 +43,23 @@ object Fa3InvoiceParser {
                 grossAmount = BigDecimal(required("P_15", "Fa", "P_15")),
                 currency = required("KodWaluty", "Fa", "KodWaluty"),
                 paidAtIssue = text("Fa", "Platnosc", "Zaplacono") == PAID_FLAG,
+                seller = Seller(
+                    name = text("Podmiot1", "DaneIdentyfikacyjne", "Nazwa"),
+                    address = listOfNotNull(
+                        text("Podmiot1", "Adres", "AdresL1"),
+                        text("Podmiot1", "Adres", "AdresL2"),
+                        text("Podmiot1", "Adres", "KodKraju"),
+                    ).flatMap { it.lines() }
+                        .map { line -> line.trim().replace(Regex("\\s+"), " ") }
+                        .filter { it.isNotEmpty() }
+                        .joinToString(", ")
+                        .ifEmpty { null },
+                ),
+                payment = Payment(
+                    form = text("Fa", "Platnosc", "FormaPlatnosci")?.let(PaymentForm::fromCode),
+                    bankAccount = text("Fa", "Platnosc", "RachunekBankowy", "NrRB"),
+                    bankName = text("Fa", "Platnosc", "RachunekBankowy", "NazwaBanku"),
+                ),
             )
         } catch (e: DateTimeParseException) {
             throw KsefException("Faktura $ksefNumber ma nieprawidłową datę: ${e.parsedString}", e)

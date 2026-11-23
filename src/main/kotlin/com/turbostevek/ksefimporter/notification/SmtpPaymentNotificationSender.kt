@@ -1,0 +1,43 @@
+package com.turbostevek.ksefimporter.notification
+
+import com.turbostevek.ksefimporter.config.ImportConfig
+import com.turbostevek.ksefimporter.history.PaymentNotificationSender
+import com.turbostevek.ksefimporter.history.PurchaseInvoice
+import com.turbostevek.ksefimporter.secrets.SecretName
+import com.turbostevek.ksefimporter.secrets.SecretStore
+import com.turbostevek.ksefimporter.secrets.SecretStoreException
+import org.springframework.mail.javamail.JavaMailSenderImpl
+import org.springframework.mail.javamail.MimeMessageHelper
+import org.springframework.stereotype.Component
+
+internal fun paymentNotificationSubject(invoiceCount: Int): String =
+    "KSeF: faktury do zapłaty ($invoiceCount)"
+
+/** Sends the batch notification through the SMTP server from the configuration. The password comes from the secret store. */
+@Component
+class SmtpPaymentNotificationSender(private val secrets: SecretStore) : PaymentNotificationSender {
+
+    override fun send(config: ImportConfig, invoices: List<PurchaseInvoice>) {
+        val smtp = config.smtp
+        val mailSender = JavaMailSenderImpl().apply {
+            host = smtp.host
+            port = smtp.port
+            javaMailProperties["mail.smtp.starttls.enable"] = "true"
+            javaMailProperties["mail.smtp.starttls.required"] = "true"
+            smtp.username?.let { user ->
+                username = user
+                password = secrets.read(SecretName.SMTP_PASSWORD)
+                    ?: throw SecretStoreException("Brak sekretu '${SecretName.SMTP_PASSWORD.qualifiedName}' w magazynie sekretów")
+                javaMailProperties["mail.smtp.auth"] = "true"
+            }
+        }
+        val message = mailSender.createMimeMessage()
+        MimeMessageHelper(message, false, Charsets.UTF_8.name()).apply {
+            setFrom(smtp.from)
+            setTo(config.recipientEmail)
+            setSubject(paymentNotificationSubject(invoices.size))
+            setText(PaymentNotificationHtml.render(invoices), true)
+        }
+        mailSender.send(message)
+    }
+}

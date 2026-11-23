@@ -32,18 +32,17 @@ Lokalna aplikacja uruchamiana raz dziennie przez harmonogram systemowy (Harmonog
 18. Jako użytkownik, chcę, żeby godzina importu była konfigurowalna w harmonogramie systemowym, żeby dopasować ją do pory, kiedy komputer jest włączony.
 19. Jako użytkownik, chcę, żeby adres odbiorcy powiadomień był konfigurowalny, żeby mogła go zmienić żona lub inna osoba.
 20. Jako użytkownik, chcę, żeby jeśli komputer był wyłączony w dniu importu, aplikacja nadrobiła import przy najbliższym uruchomieniu, żeby nie zgubić faktur.
-21. Jako użytkownik, chcę, żeby po nadrobieniu wysłano maksymalnie jedno powiadomienie na dobę, żeby nie zalewać skrzynki.
-22. Jako użytkownik, chcę, żeby po kilku dniach bez uruchomienia wysłano jedno zbiorcze powiadomienie o wszystkich nowych fakturach od ostatniego sukcesu, żeby dostać pełny obraz.
-23. Jako użytkownik, chcę, żeby token KSeF był przechowywany w systemowym magazynie sekretów, żeby nie leżał jawnie w pliku ani w repozytorium.
-24. Jako użytkownik, chcę, żeby hasło SMTP było przechowywane w tym samym magazynie sekretów co token, żeby nie było jawne w konfiguracji.
-25. Jako użytkownik, chcę, żeby aplikacja działała na Windows 11 i Ubuntu bez zmian w kodzie, żeby używać jej na obu systemach.
-26. Jako użytkownik, chcę móc przełączyć środowisko KSeF między testowym a produkcyjnym w konfiguracji, żeby nie pobierać danych z produkcji podczas testów.
-27. Jako użytkownik, chcę, żeby domyślnie aplikacja łączyła się ze środowiskiem testowym, żeby przypadkowo nie pracować na produkcji.
-28. Jako użytkownik, chcę, żeby błąd połączenia z KSeF lub SMTP był zapisany w logu i nie kończył się cichą porażką, żeby wiedzieć, co się stało.
-29. Jako użytkownik, chcę, żeby nieudany import nie aktualizował daty ostatniego sukcesu, żeby następne uruchomienie ponowiło pobieranie od właściwego miejsca.
-30. Jako użytkownik, chcę, żeby ponowny import tych samych faktur nie tworzył duplikatów w Historii ani nie wysyłał ponownie powiadomień.
-31. Jako użytkownik, chcę, żeby aplikacja uruchamiała się z linii poleceń bez interfejsu graficznego, żeby działała w harmonogramie.
-32. Jako przyszły użytkownik, chcę, żeby logika importu i powiadomień nie zależała od sposobu uruchamiania, żeby w przyszłości dodać UI bez przepisywania rdzenia.
+21. Jako użytkownik, chcę, żeby po kilku dniach bez uruchomienia wysłano jedno zbiorcze powiadomienie o wszystkich nowych fakturach od ostatniego sukcesu, żeby dostać pełny obraz.
+22. Jako użytkownik, chcę, żeby token KSeF był przechowywany w systemowym magazynie sekretów, żeby nie leżał jawnie w pliku ani w repozytorium.
+23. Jako użytkownik, chcę, żeby hasło SMTP było przechowywane w tym samym magazynie sekretów co token, żeby nie było jawne w konfiguracji.
+24. Jako użytkownik, chcę, żeby aplikacja działała na Windows 11 i Ubuntu bez zmian w kodzie, żeby używać jej na obu systemach.
+25. Jako użytkownik, chcę móc przełączyć środowisko KSeF między testowym a produkcyjnym w konfiguracji, żeby nie pobierać danych z produkcji podczas testów.
+26. Jako użytkownik, chcę, żeby domyślnie aplikacja łączyła się ze środowiskiem testowym, żeby przypadkowo nie pracować na produkcji.
+27. Jako użytkownik, chcę, żeby błąd połączenia z KSeF lub SMTP był zapisany w logu i nie kończył się cichą porażką, żeby wiedzieć, co się stało.
+28. Jako użytkownik, chcę, żeby nieudany import nie aktualizował daty ostatniego sukcesu, żeby następne uruchomienie ponowiło pobieranie od właściwego miejsca.
+29. Jako użytkownik, chcę, żeby ponowny import tych samych faktur nie tworzył duplikatów w Historii ani nie wysyłał ponownie powiadomień.
+30. Jako użytkownik, chcę, żeby aplikacja uruchamiała się z linii poleceń bez interfejsu graficznego, żeby działała w harmonogramie.
+31. Jako przyszły użytkownik, chcę, żeby logika importu i powiadomień nie zależała od sposobu uruchamiania, żeby w przyszłości dodać UI bez przepisywania rdzenia.
 
 ## Implementation Decisions
 
@@ -57,8 +56,8 @@ Moduły:
   - Brak pliku: czytelny błąd z podaną ścieżką i instrukcją, bez tworzenia pliku.
 - **Magazyn sekretów**: abstrakcja nad systemowym magazynem (Windows Credential Manager, libsecret na Ubuntu). Udostępnia token KSeF i hasło SMTP.
 - **Klient KSeF**: integracja z KSeF API v2, logowanie tokenem, pobieranie paczek faktur za zakres dat. Przy zmianie środowiska zmienia się tylko adres bazowy.
-- **Parser FA(3)**: z XML wyciąga NIP sprzedawcy, NIP nabywcy, datę wystawienia, termin płatności (opcjonalny), kwotę brutto, walutę oraz oznaczenie zapłaty z bloku `Platnosc` (opcjonalne). Numer KSeF nie występuje w XML (schemat FA(3) go nie zawiera); pochodzi z nazwy pliku w paczce (`{ksefNumber}.xml`), zgodnej z `ksefNumber` w `_metadata.json`. Nie zapisuje pliku XML.
-- **Historia**: lokalna baza SQLite `invoice-history.db` w katalogu pliku konfiguracyjnego. Tabela faktur: numer KSeF (unikalny), dane z parsera, znacznik „opłacona przy wystawieniu”, znacznik „powiadomiono”, data importu. Brak terminu płatności zapisywany jest jako NULL i pokazywany jako „brak terminu”. Tabela stanu importu: data ostatniego udanego importu.
+- **Parser FA(3)**: z XML wyciąga NIP sprzedawcy, nazwę i adres sprzedawcy, NIP nabywcy, datę wystawienia, termin płatności (opcjonalny), kwotę brutto, walutę oraz z bloku `Platnosc` (opcjonalne): oznaczenie zapłaty, formę płatności, numer rachunku i nazwę banku. Numer KSeF nie występuje w XML (schemat FA(3) go nie zawiera); pochodzi z nazwy pliku w paczce (`{ksefNumber}.xml`), zgodnej z `ksefNumber` w `_metadata.json`. Nie zapisuje pliku XML.
+- **Historia**: lokalna baza SQLite `invoice-history.db` w katalogu pliku konfiguracyjnego. Tabela `invoice_history` (klucz: `ksef_number`) zawiera kolumny: `ksef_number`, `seller_nip`, `buyer_nip`, `issue_date`, `due_date`, `gross_amount`, `currency`, `paid_at_issue` (znacznik „opłacona przy wystawieniu”), `notified` (znacznik „powiadomiono”), `imported_at`, `seller_name`, `seller_address` (adres w jednej linii, części połączone „, ”, znaki nowej linii usunięte), `payment_form` (kod FA(3) `FormaPlatnosci`, np. `6`; etykieta „przelew” pojawia się tylko w e-mailu, nieznany kod trafia do e-maila jako „nieznana (kod X)”), `bank_account` i `bank_name`. Brak terminu płatności zapisywany jest jako NULL i pokazywany jako „brak terminu”. Zmiana modelu: `payment_form` przechowywał wcześniej etykietę, a teraz przechowuje kod; wiersze ze starego schematu w bazie testowej zostały wyczyszczone. Tabela `import_state` przechowuje `last_imported_to`, czyli datę ostatniego udanego importu.
 - **Powiadomienia**: wysyłka zbiorczego maila przez SMTP. Mail zawiera nowe faktury do zapłaty z danego przebiegu. Nie jest wysyłany, gdy takich faktur nie ma.
 - **Serwis importu** (główny moduł): dla danego zakresu pobiera paczki z klienta KSeF, parsuje faktury, zapisuje nowe do Historii (pomijając istniejące po numerze KSeF), wysyła jedno zbiorcze powiadomienie o nowych fakturach do zapłaty, a następnie oznacza je jako powiadomione i aktualizuje datę ostatniego sukcesu dopiero po pełnym przebiegu.
 - **Punkt wejścia CLI**: jedno polecenie uruchamiające import; kod zwraca niezerowy status przy błędzie. Kody wyjścia: `0` import zakończony, `1` błąd konfiguracji lub brak tokenu, `2` błędne użycie, `3` błąd KSeF, `4` nieoczekiwany błąd. Po udanym imporcie logowana jest liczba pobranych faktur zakupowych i liczba dodanych do Historii (pliki XML nie są zapisywane na dysku). Ta sama lista jest w [README](../../README.md).
@@ -110,7 +109,7 @@ Brak testów na prawdziwym KSeF i SMTP w CI. Testy integracyjne z środowiskiem 
 
 ## Further Notes
 
-- Tryby powiadomień (`PER_INVOICE`/`DAILY_DIGEST`) zostały porzucone. Obowiązuje jeden zbiorczy mail na przebieg, co najwyżej jeden na dobę, bez maila przy braku nowych faktur do zapłaty.
+- Tryby powiadomień (`PER_INVOICE`/`DAILY_DIGEST`) zostały porzucone. Obowiązuje jeden zbiorczy mail na przebieg, częstotliwość kontroluje zewnętrzny harmonogram (bez limitu w aplikacji), bez maila przy braku nowych faktur do zapłaty.
 - **Zweryfikowano (issue #3, źródła: repozytorium CIRFMF/ksef-api, XSD FA(3) `schemat_FA(3)_v1-0E.xsd`)**:
   - Oznaczenie zapłaty: `Fa/Platnosc/Zaplacono` = `1` (zapłacono). Obok może być `Fa/Platnosc/DataZaplaty`. Blok `Platnosc` jest opcjonalny.
   - Płatność częściowa: `Fa/Platnosc/ZnacznikZaplatyCzesciowej` (`1` = w części, `2` = w całości w ratach), z `ZaplataCzesciowa`. Faktura z płatnością częściową jest traktowana jako nieopłacona.

@@ -21,6 +21,7 @@ repositories {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.boot:spring-boot-starter-jackson")
+	implementation("org.springframework.boot:spring-boot-starter-mail")
 	implementation("tools.jackson.dataformat:jackson-dataformat-yaml")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
