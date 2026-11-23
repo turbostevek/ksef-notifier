@@ -26,7 +26,7 @@ java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 
 Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku.
 
-Po imporcie wysyłany jest jeden zbiorczy e-mail na adres `recipientEmail` z fakturami zakupowymi do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) jest tylko logowany i nie zmienia kodu wyjścia; kolejny przebieg ponawia wysyłkę zaległych faktur.
+Po imporcie wysyłany jest jeden zbiorczy e-mail na adres `recipientEmail` z fakturami zakupowymi do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Przy każdej fakturze e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) jest tylko logowany i nie zmienia kodu wyjścia; kolejny przebieg ponawia wysyłkę zaległych faktur.
 
 Kody wyjścia:
 

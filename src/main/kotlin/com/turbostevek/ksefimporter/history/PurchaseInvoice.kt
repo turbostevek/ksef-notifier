@@ -12,4 +12,9 @@ data class PurchaseInvoice(
     val grossAmount: BigDecimal,
     val currency: String,
     val paidAtIssue: Boolean,
+    val sellerName: String? = null,
+    val sellerAddress: String? = null,
+    val paymentForm: String? = null,
+    val bankAccount: String? = null,
+    val bankName: String? = null,
 )

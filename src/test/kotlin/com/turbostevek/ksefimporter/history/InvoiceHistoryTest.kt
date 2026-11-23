@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.math.BigDecimal
 import java.nio.file.Path
+import java.sql.DriverManager
 import java.time.Instant
 import java.time.LocalDate
 
@@ -55,6 +56,63 @@ class InvoiceHistoryTest {
             assertEquals(BigDecimal("1234.50"), stored.grossAmount)
             assertEquals("EUR", stored.currency)
             assertEquals(true, stored.paidAtIssue)
+        }
+    }
+
+    @Test
+    fun `zapisuje dane wystawcy i platnosci oraz odczytuje je z historii`() {
+        InvoiceHistory(dir.resolve("invoice-history.db")).use { history ->
+            history.save(
+                listOf(
+                    invoice("A").copy(
+                        sellerName = "Firma",
+                        sellerAddress = "ul. Długa 1, Warszawa",
+                        paymentForm = "przelew",
+                        bankAccount = "PL61109010140000071219812874",
+                        bankName = "PKO BP",
+                    ),
+                ),
+                importedUpTo,
+                importedUpTo,
+            )
+
+            val stored = history.findAll().single()
+            assertEquals("Firma", stored.sellerName)
+            assertEquals("ul. Długa 1, Warszawa", stored.sellerAddress)
+            assertEquals("przelew", stored.paymentForm)
+            assertEquals("PL61109010140000071219812874", stored.bankAccount)
+            assertEquals("PKO BP", stored.bankName)
+        }
+    }
+
+    @Test
+    fun `baza ze starym schematem dostaje nowe kolumny, a stare wiersze zostaja z pustymi polami`() {
+        val path = dir.resolve("old.db")
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    """
+                    CREATE TABLE invoice_history (
+                        ksef_number TEXT PRIMARY KEY, seller_nip TEXT, buyer_nip TEXT, issue_date TEXT NOT NULL,
+                        due_date TEXT, gross_amount TEXT NOT NULL, currency TEXT NOT NULL,
+                        paid_at_issue INTEGER NOT NULL, notified INTEGER NOT NULL DEFAULT 0, imported_at TEXT NOT NULL
+                    )
+                    """,
+                )
+                statement.executeUpdate(
+                    "INSERT INTO invoice_history VALUES ('OLD', '1111111111', '2222222222', '2026-03-10', NULL, '10.00', 'PLN', 0, 0, '2026-04-01T10:00:00Z')",
+                )
+            }
+        }
+
+        InvoiceHistory(path).use { history ->
+            val old = history.findAll().single()
+            assertEquals("OLD", old.ksefNumber)
+            assertNull(old.sellerName)
+
+            history.save(listOf(invoice("NEW").copy(sellerName = "Firma")), importedUpTo, importedUpTo)
+
+            assertEquals("Firma", history.findAll().single { it.ksefNumber == "NEW" }.sellerName)
         }
     }
 

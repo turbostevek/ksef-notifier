@@ -71,6 +71,43 @@ class Fa3InvoiceParserTest {
     }
 
     @Test
+    fun `odczytuje nazwe i adres sprzedawcy w jednej linii`() {
+        val invoice = parse()
+
+        assertEquals("Sprzedawca Sp. z o.o.", invoice.sellerName)
+        assertEquals("ul. Długa 1, 00-001 Warszawa, PL", invoice.sellerAddress)
+    }
+
+    @Test
+    fun `mapuje kod formy platnosci FA(3) na nazwe`() {
+        assertEquals("przelew", parse(platnosc = "<FormaPlatnosci>6</FormaPlatnosci>").paymentForm)
+        assertEquals("gotówka", parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>").paymentForm)
+    }
+
+    @Test
+    fun `nieznany kod formy platnosci zapisuje kod bez zmian`() {
+        assertEquals("9", parse(platnosc = "<FormaPlatnosci>9</FormaPlatnosci>").paymentForm)
+    }
+
+    @Test
+    fun `odczytuje rachunek bankowy i nazwe banku, gdy sa podane`() {
+        val invoice = parse(
+            platnosc = "<RachunekBankowy><NrRB>PL61109010140000071219812874</NrRB><NazwaBanku>PKO BP</NazwaBanku></RachunekBankowy>",
+        )
+
+        assertEquals("PL61109010140000071219812874", invoice.bankAccount)
+        assertEquals("PKO BP", invoice.bankName)
+    }
+
+    @Test
+    fun `bez rachunku bankowego pola rachunku sa puste`() {
+        val invoice = parse(platnosc = "<FormaPlatnosci>1</FormaPlatnosci>")
+
+        assertNull(invoice.bankAccount)
+        assertNull(invoice.bankName)
+    }
+
+    @Test
     fun `niepoprawny XML konczy sie bledem KSeF`() {
         assertThrows<KsefException> {
             Fa3InvoiceParser.parse(KSEF_NUMBER, "<Faktura>".toByteArray())

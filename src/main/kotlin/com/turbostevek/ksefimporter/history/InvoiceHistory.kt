@@ -20,6 +20,21 @@ class InvoiceHistory(path: Path) : AutoCloseable {
             statement.executeUpdate(CREATE_INVOICES)
             statement.executeUpdate(CREATE_IMPORT_STATE)
         }
+        addColumnsMissingFromOlderSchema()
+    }
+
+    /** Databases created before the seller and payment columns existed get them added; old rows keep NULL there. */
+    private fun addColumnsMissingFromOlderSchema() {
+        val existing = connection.createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info(invoice_history)").use { rows ->
+                generateSequence { if (rows.next()) rows.getString("name") else null }.toSet()
+            }
+        }
+        connection.createStatement().use { statement ->
+            NEW_COLUMNS.filter { it !in existing }.forEach { column ->
+                statement.executeUpdate("ALTER TABLE invoice_history ADD COLUMN $column TEXT")
+            }
+        }
     }
 
     /** Returns the end of the window of the last successful import, or null if no import has run yet. */
@@ -106,6 +121,11 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         "gross_amount" to grossAmount.toPlainString(),
         "currency" to currency,
         "paid_at_issue" to if (paidAtIssue) 1 else 0,
+        "seller_name" to sellerName,
+        "seller_address" to sellerAddress,
+        "payment_form" to paymentForm,
+        "bank_account" to bankAccount,
+        "bank_name" to bankName,
         "imported_at" to importedAt.toString(),
     )
 
@@ -122,6 +142,11 @@ class InvoiceHistory(path: Path) : AutoCloseable {
         grossAmount = BigDecimal(getString("gross_amount")),
         currency = getString("currency"),
         paidAtIssue = getInt("paid_at_issue") == 1,
+        sellerName = getString("seller_name"),
+        sellerAddress = getString("seller_address"),
+        paymentForm = getString("payment_form"),
+        bankAccount = getString("bank_account"),
+        bankName = getString("bank_name"),
     )
 
     private companion object {
@@ -136,7 +161,12 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                 currency TEXT NOT NULL,
                 paid_at_issue INTEGER NOT NULL,
                 notified INTEGER NOT NULL DEFAULT 0,
-                imported_at TEXT NOT NULL
+                imported_at TEXT NOT NULL,
+                seller_name TEXT,
+                seller_address TEXT,
+                payment_form TEXT,
+                bank_account TEXT,
+                bank_name TEXT
             )
         """
         const val CREATE_IMPORT_STATE = """
@@ -145,21 +175,24 @@ class InvoiceHistory(path: Path) : AutoCloseable {
                 last_imported_to TEXT NOT NULL
             )
         """
+        val NEW_COLUMNS = listOf("seller_name", "seller_address", "payment_form", "bank_account", "bank_name")
         val INSERT_COLUMNS = listOf(
             "ksef_number", "seller_nip", "buyer_nip", "issue_date", "due_date",
             "gross_amount", "currency", "paid_at_issue", "imported_at",
-        )
+        ) + NEW_COLUMNS
         const val UPSERT_IMPORT_STATE = """
             INSERT INTO import_state (id, last_imported_to) VALUES (1, ?)
             ON CONFLICT (id) DO UPDATE SET last_imported_to = excluded.last_imported_to
         """
         const val SELECT_INVOICES = """
-            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue
+            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
+                seller_name, seller_address, payment_form, bank_account, bank_name
             FROM invoice_history
             ORDER BY issue_date, ksef_number
         """
         const val SELECT_UNNOTIFIED_TO_PAY = """
-            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue
+            SELECT ksef_number, seller_nip, buyer_nip, issue_date, due_date, gross_amount, currency, paid_at_issue,
+                seller_name, seller_address, payment_form, bank_account, bank_name
             FROM invoice_history
             WHERE notified = 0 AND paid_at_issue = 0
             ORDER BY issue_date, ksef_number

@@ -11,7 +11,10 @@ internal fun fa3Xml(
 ): ByteArray = """
     <?xml version="1.0" encoding="UTF-8"?>
     <Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">
-      <Podmiot1><DaneIdentyfikacyjne><NIP>1111111111</NIP></DaneIdentyfikacyjne></Podmiot1>
+      <Podmiot1>
+        <DaneIdentyfikacyjne><NIP>1111111111</NIP><Nazwa>Sprzedawca Sp. z o.o.</Nazwa></DaneIdentyfikacyjne>
+        <Adres><KodKraju>PL</KodKraju><AdresL1>ul. Długa 1</AdresL1><AdresL2>00-001 Warszawa</AdresL2></Adres>
+      </Podmiot1>
       <Podmiot2><DaneIdentyfikacyjne><NIP>$buyerNip</NIP></DaneIdentyfikacyjne></Podmiot2>
       <Fa>
         <KodWaluty>$currency</KodWaluty>

@@ -17,13 +17,24 @@ internal fun paymentNotificationBody(invoices: List<PurchaseInvoice>): String =
     buildString {
         appendLine("Nowe faktury zakupowe do zapłaty:")
         appendLine()
-        invoices.forEach { appendLine(invoiceLine(it)) }
+        invoices.forEach { invoice ->
+            appendLine(invoiceLine(invoice))
+            appendLine("  wystawca: ${invoice.sellerName ?: "brak danych"}, ${invoice.sellerAddress ?: "brak adresu"}")
+            appendLine("  płatność: ${paymentDetails(invoice)}")
+        }
     }.trimEnd()
 
 private fun invoiceLine(invoice: PurchaseInvoice): String {
     val dueDate = invoice.dueDate?.toString() ?: "brak terminu"
-    return "- ${invoice.issueDate}, sprzedawca ${invoice.sellerNip ?: "brak danych"}, " +
-        "nr KSeF ${invoice.ksefNumber}, ${invoice.grossAmount.toPlainString()} ${invoice.currency}, termin: $dueDate"
+    return "- ${invoice.issueDate}, nr KSeF ${invoice.ksefNumber}, " +
+        "${invoice.grossAmount.toPlainString()} ${invoice.currency}, termin: $dueDate"
+}
+
+private fun paymentDetails(invoice: PurchaseInvoice): String {
+    val form = invoice.paymentForm ?: "brak danych"
+    val account = invoice.bankAccount ?: return form
+    val bank = invoice.bankName?.let { " ($it)" } ?: ""
+    return "$form, rachunek $account$bank"
 }
 
 /** Sends the batch notification through the SMTP server from the configuration. The password comes from the secret store. */
