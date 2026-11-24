@@ -28,6 +28,8 @@ Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konf
 
 Po imporcie wysyłany jest jeden zbiorczy e-mail HTML na adres `recipientEmail` z tabelą faktur zakupowych do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Kolumny w stałej kolejności: data wystawienia, numer KSeF, sprzedawca, adres, forma płatności, rachunek, kwota, termin płatności. W tabeli e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) nie cofa zapisu faktur, ale nie przesuwa daty ostatniego sukcesu: przebieg kończy się kodem `5`, a kolejny przebieg ponownie pobiera ten sam zakres i ponawia wysyłkę zaległych faktur.
 
+Jeśli wiadomość została wysłana, ale aplikacja zakończyła się przed zapisaniem znacznika powiadomienia, następny przebieg może wysłać ją ponownie.
+
 Kody wyjścia:
 
 - `0` – konfiguracja poprawna, import zakończony (lub token zapisany, dla `check-token`)
@@ -75,3 +77,45 @@ smtp:
   username: ksef@example.com # opcjonalne
   from: ksef@example.com     # wymagane
 ```
+
+`startDate` określa początek pierwszego importu; późniejsze importy zaczynają się od ostatniego sukcesu. `recipientEmail` to adres odbiorcy powiadomień. `smtp.host` i `smtp.port` wskazują serwer SMTP, `smtp.from` to adres nadawcy, a `smtp.username` włącza uwierzytelnianie hasłem z magazynu sekretów. Serwer SMTP musi obsługiwać STARTTLS.
+
+`importTime` jest wczytywany i sprawdzany, ale **nie uruchamia importu**. Godzinę i częstotliwość ustawia się w harmonogramie systemowym; zmiana `importTime` nie zmienia harmonogramu.
+
+## Codzienny import z harmonogramu
+
+Zbuduj JAR, przygotuj plik konfiguracyjny i zapisz sekrety zgodnie z sekcjami powyżej. Uruchom import ręcznie tym samym kontem, które będzie wykonywać zadanie. Konto musi mieć dostęp do JAR-a, konfiguracji, magazynu sekretów oraz możliwość zapisu bazy obok konfiguracji. Przykładowe ścieżki poniżej zastąp własnymi.
+
+### Windows 11: Harmonogram zadań
+
+1. Otwórz Harmonogram zadań i wybierz **Utwórz zadanie**. W zakładce **Ogólne** wybierz konto, na którym zapisano sekrety, oraz **Uruchom tylko wtedy, gdy użytkownik jest zalogowany**.
+2. W zakładce **Wyzwalacze** dodaj wyzwalacz **Codziennie**, co 1 dzień, np. o 07:30.
+3. W zakładce **Akcje** dodaj **Uruchom program**:
+   - **Program/skrypt:** pełna ścieżka do `java.exe` z Javy 21, np. `C:\Program Files\Java\jdk-21\bin\java.exe`.
+   - **Dodaj argumenty:** `-jar "C:\ksef-importer\ksef-importer-0.0.1-SNAPSHOT.jar" import --config="C:\ksef-importer\ksef-importer.yml"`.
+   - **Rozpocznij w:** `C:\ksef-importer` (bez cudzysłowów).
+4. W zakładce **Ustawienia** włącz uruchomienie zadania możliwie szybko po pominiętym terminie i ustaw zasadę dla działającego już zadania na **Nie uruchamiaj nowego wystąpienia**. Zapisz zadanie.
+5. Uruchom zadanie ręcznie z Harmonogramu i sprawdź **Wynik ostatniego uruchomienia** oraz historię zadania. Niezerowy wynik oznacza błąd opisany w sekcji kodów wyjścia.
+
+Zadanie wymaga zalogowania wybranego użytkownika. Po wyłączeniu komputera funkcja uruchomienia po pominiętym terminie pozwala nadrobić import; sprawdź jej działanie przy wybranych ustawieniach konta.
+
+### Ubuntu: cron
+
+Użyj crontaba tego samego użytkownika, który zapisał sekrety. W tym przykładzie `/home/user` to katalog tego użytkownika, a `1000` to jego UID (`id -u`). Dostosuj ścieżki, UID i godzinę:
+
+```cron
+PATH=/usr/bin:/bin
+30 7 * * * DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/java -jar /home/user/ksef-importer/ksef-importer-0.0.1-SNAPSHOT.jar import --config=/home/user/ksef-importer/ksef-importer.yml >> /home/user/ksef-importer/import.log 2>&1
+```
+
+Wpis dodaj przez `crontab -e`. Ustawienie uruchamia import codziennie o 07:30 według czasu systemowego; sprawdź `/usr/bin/java -version` (wymagana Java 21) i dostępność `secret-tool` w podanym `PATH`. Ścieżki w przykładzie nie zawierają spacji.
+
+Cron nie dziedziczy pełnego środowiska sesji graficznej. Powyższy adres jest przykładem dla dostępnej sesyjnej magistrali D-Bus użytkownika; magazyn libsecret musi być dostępny i odblokowany podczas zadania. Wstępnie sprawdź dostęp do tokenu z tym samym `PATH` i adresem D-Bus, podstawiając UID i ścieżkę do JAR-a:
+
+```sh
+env PATH=/usr/bin:/bin DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/java -jar /home/user/ksef-importer/ksef-importer-0.0.1-SNAPSHOT.jar check-token
+```
+
+Następnie sprawdź uruchomienie importu i `import.log`; ogranicz dostęp do logu, ponieważ może zawierać informacje o błędach. Jeśli magazyn nie jest dostępny z crona, skonfiguruj dostęp do sesji i odblokowanie magazynu dla tego konta przed użyciem harmonogramu. `check-token` nie sprawdza hasła SMTP ani wysyłki. Testowy import faktycznie pobiera faktury i może wysłać powiadomienie.
+
+Cron nie uruchamia pominiętego zadania po włączeniu komputera. Po pominiętym terminie uruchom import ręcznie albo poczekaj na następny termin, gdy komputer będzie włączony i magazyn dostępny; import obejmie zaległy zakres.
