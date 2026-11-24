@@ -42,21 +42,21 @@ class PurchaseInvoiceImporter(
     private fun notifyAboutInvoicesToPay(config: ImportConfig, history: InvoiceHistory): Boolean {
         val toPay = history.unnotifiedToPay()
         if (toPay.isEmpty()) return false
-        if (!sendNotification(config, toPay)) return true
+        if (sendFailed(config, toPay)) return true
         history.markNotified(toPay.map { it.ksefNumber })
         return false
     }
 
     /**
-     * Returns false when the delivery failed, so the invoices stay unnotified. Errors while marking the invoices
+     * Returns true when the delivery failed, so the invoices stay unnotified. Errors while marking the invoices
      * after a successful delivery are not caught here: they propagate and the next run may notify them again.
      */
-    private fun sendNotification(config: ImportConfig, toPay: List<PurchaseInvoice>): Boolean =
+    private fun sendFailed(config: ImportConfig, toPay: List<PurchaseInvoice>): Boolean =
         try {
             notificationSender.send(config, toPay)
-            true
+            false
         } catch (e: Exception) {
             log.error("Nie udało się wysłać powiadomienia o ${toPay.size} fakturach do zapłaty, ponowienie w kolejnym przebiegu", e)
-            false
+            true
         }
 }
