@@ -14,11 +14,11 @@ Lokalna aplikacja uruchamiana raz dziennie przez harmonogram systemowy (Harmonog
 
 1. Jako użytkownik, chcę uruchamiać import raz dziennie przez harmonogram systemowy, żeby nie musiałem pamiętać o sprawdzaniu KSeF.
 2. Jako użytkownik, chcę otrzymać email, gdy pojawi się nowa faktura do zapłaty, żeby nie przegapić terminu.
-3. Jako użytkownik, chcę, żeby powiadomienie dotyczyło tylko nowo zaimportowanych faktur, żeby nie dostawać duplikatów.
-4. Jako użytkownik, chcę, żeby każda faktura do zapłaty wywoływała powiadomienie co najwyżej raz, żeby nie dostawać go ponownie przy kolejnych importach.
+3. Jako użytkownik, chcę, żeby powiadomienie dotyczyło faktur do zapłaty, które nie są jeszcze oznaczone jako powiadomione, także po wcześniejszej nieudanej wysyłce.
+4. Jako użytkownik, chcę, żeby faktura do zapłaty oznaczona jako powiadomiona nie wywoływała kolejnego powiadomienia. Akceptuję możliwy duplikat po wysyłce i przed zapisem znacznika.
 5. Jako użytkownik, chcę, żeby faktura oznaczona na fakturze jako już opłacona trafiała do Historii bez powiadomienia, żeby zakupy z przedpłatą nie generowały fałszywych alarmów.
 6. Jako użytkownik, chcę, żeby faktura bez oznaczenia zapłaty była traktowana jako do zapłaty, żeby nie przegapić faktury, gdy oznaczenie jest brakujące.
-7. Jako użytkownik, chcę, żeby aplikacja nie wysyłała powiadomienia o fakturze, którą już wcześniej zaimportowała, nawet jeśli później została opłacona, żeby zachowany był prosty model bez śledzenia płatności.
+7. Jako użytkownik, chcę, żeby aplikacja nie wysyłała ponownie powiadomienia o fakturze oznaczonej jako powiadomiona, nawet jeśli później została opłacona, żeby zachowany był prosty model bez śledzenia płatności.
 8. Jako użytkownik, chcę widzieć w Historii wszystkie zaimportowane faktury zakupowe, żeby mieć ich zapis.
 9. Jako użytkownik, chcę, żeby w Historii był numer KSeF, NIP sprzedawcy, data wystawienia, termin płatności, kwota, waluta, oznaczenie zapłaty i informacja o wysłanym powiadomieniu, żeby wiedzieć, o czym jest faktura.
 10. Jako użytkownik, chcę, żeby w Historii brakujący termin płatności był oznaczony jako „brak terminu”, a w powiadomieniu data wystawienia była podana jako odniesienie, żeby faktura nie zginęła.
@@ -40,7 +40,7 @@ Lokalna aplikacja uruchamiana raz dziennie przez harmonogram systemowy (Harmonog
 26. Jako użytkownik, chcę, żeby domyślnie aplikacja łączyła się ze środowiskiem testowym, żeby przypadkowo nie pracować na produkcji.
 27. Jako użytkownik, chcę, żeby błąd połączenia z KSeF lub SMTP był zapisany w logu i nie kończył się cichą porażką, żeby wiedzieć, co się stało.
 28. Jako użytkownik, chcę, żeby nieudany import nie aktualizował daty ostatniego sukcesu, żeby następne uruchomienie ponowiło pobieranie od właściwego miejsca.
-29. Jako użytkownik, chcę, żeby ponowny import tych samych faktur nie tworzył duplikatów w Historii ani nie wysyłał ponownie powiadomień.
+29. Jako użytkownik, chcę, żeby ponowny import tych samych faktur nie tworzył duplikatów w Historii ani nie wysyłał ponownie powiadomień o fakturach oznaczonych jako powiadomione.
 30. Jako użytkownik, chcę, żeby aplikacja uruchamiała się z linii poleceń bez interfejsu graficznego, żeby działała w harmonogramie.
 31. Jako przyszły użytkownik, chcę, żeby logika importu i powiadomień nie zależała od sposobu uruchamiania, żeby w przyszłości dodać UI bez przepisywania rdzenia.
 
