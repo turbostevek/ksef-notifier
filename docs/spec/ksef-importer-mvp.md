@@ -66,7 +66,7 @@ Zasady:
 - Aplikacja odczytuje oznaczenie zapłaty z faktury w chwili importu i nie śledzi późniejszych zmian (ADR 0001).
 - Faktura zakupowa to faktura, w której nabywcą jest podmiot.
 - Brak bloku płatności lub oznaczenia zapłaty oznacza fakturę do zapłaty.
-- Faktura jest zgłaszana w powiadomieniu co najwyżej raz. Znacznik „powiadomiono” ustawiany po udanej wysyłce.
+- Faktura jest zgłaszana w powiadomieniu co najmniej raz: znacznik „powiadomiono” ustawiany jest po udanej wysyłce. Jeśli przebieg przerwie się między wysyłką a zapisem znacznika (błąd bazy, zabicie procesu), kolejny przebieg wyśle te faktury ponownie. Wysyłki SMTP nie da się objąć transakcją bazy danych, a zgubienie powiadomienia byłoby gorsze niż duplikat.
 - Nieudany przebieg nie przesuwa daty ostatniego sukcesu. Kolejny przebieg pobiera ponownie zakres od tej daty; duplikaty pomija zapis po numerze KSeF.
 - Zakres pierwszego importu bierze datę startową z konfiguracji; kolejne przebiegi biorą datę ostatniego sukcesu.
 - Oznaczenie zapłaty w FA(3): element `Fa/Platnosc/Zaplacono` o wartości `1` (typ `TWybor1`), opcjonalnie z `Fa/Platnosc/DataZaplaty`. Źródło: XSD FA(3) (zob. Further Notes).

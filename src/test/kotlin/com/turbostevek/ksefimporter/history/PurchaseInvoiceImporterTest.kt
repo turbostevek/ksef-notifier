@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import java.sql.DriverManager
+import java.sql.SQLException
 import java.time.Instant
 
 class PurchaseInvoiceImporterTest {
@@ -80,6 +82,46 @@ class PurchaseInvoiceImporterTest {
 
         assertEquals(listOf(listOf("A")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
         assertTrue(InvoiceHistory(historyPath).use { it.unnotifiedToPay() }.isEmpty())
+    }
+
+    @Test
+    fun `kolejny przebieg nie wysyla ponownie faktur juz powiadomionych, tylko nowe`() {
+        source.files = listOf(invoiceFile("A", buyerNip = TEST_NIP))
+        importer.importInvoices(config, token, historyPath)
+
+        source.files = listOf(invoiceFile("A", buyerNip = TEST_NIP), invoiceFile("B", buyerNip = TEST_NIP))
+        importer.importInvoices(config, token, historyPath)
+
+        assertEquals(listOf(listOf("A"), listOf("B")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
+    }
+
+    @Test
+    fun `nadrobienie po kilku dniach wysyla jeden mail obejmujacy wszystkie nowe faktury do zaplaty`() {
+        importer.importInvoices(config, token, historyPath)
+        source.failure = KsefException("KSeF niedostępny")
+        assertThrows<KsefException> { importer.importInvoices(config, token, historyPath) }
+
+        source.failure = null
+        source.files = listOf(invoiceFile("A", buyerNip = TEST_NIP), invoiceFile("B", buyerNip = TEST_NIP))
+        importer.importInvoices(config, token, historyPath)
+
+        assertEquals(listOf(listOf("A", "B")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
+    }
+
+    @Test
+    fun `blad zapisu znacznika po udanej wysylce jest bledem przebiegu, nie nieudana wysylka`() {
+        source.files = listOf(invoiceFile("A", buyerNip = TEST_NIP))
+        notifier.afterSend = { dropInvoiceHistoryTable() }
+
+        assertThrows<SQLException> { importer.importInvoices(config, token, historyPath) }
+
+        assertEquals(listOf(listOf("A")), notifier.sent.map { mail -> mail.map { it.ksefNumber } })
+    }
+
+    private fun dropInvoiceHistoryTable() {
+        DriverManager.getConnection("jdbc:sqlite:${historyPath.toAbsolutePath()}").use { connection ->
+            connection.createStatement().use { it.executeUpdate("DROP TABLE invoice_history") }
+        }
     }
 
     @Test
@@ -156,10 +198,12 @@ class PurchaseInvoiceImporterTest {
     private class FakePaymentNotificationSender : PaymentNotificationSender {
         val sent = mutableListOf<List<PurchaseInvoice>>()
         var failure: RuntimeException? = null
+        var afterSend: (() -> Unit)? = null
 
         override fun send(config: ImportConfig, invoices: List<PurchaseInvoice>) {
             failure?.let { throw it }
             sent += invoices
+            afterSend?.invoke()
         }
     }
 
