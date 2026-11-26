@@ -44,6 +44,7 @@ internal data class ConfigFile(
             port = smtp?.port ?: defaults.smtp?.port,
             username = smtp?.username ?: defaults.smtp?.username,
             from = smtp?.from ?: defaults.smtp?.from,
+            caCertificate = smtp?.caCertificate ?: defaults.smtp?.caCertificate,
         ),
     )
 }
@@ -57,4 +58,5 @@ internal data class SmtpFile(
     val port: Int? = null,
     val username: String? = null,
     val from: String? = null,
+    val caCertificate: String? = null,
 )

@@ -5,9 +5,11 @@ import com.turbostevek.ksefimporter.config.ImportConfigLoader
 import com.turbostevek.ksefimporter.history.PurchaseInvoiceImporter
 import com.turbostevek.ksefimporter.ksef.KsefException
 import com.turbostevek.ksefimporter.ksef.KsefToken
+import com.turbostevek.ksefimporter.notification.SmtpPaymentNotificationSender
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
+import jakarta.mail.MessagingException
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
@@ -19,6 +21,7 @@ import java.nio.file.Path
 class ImportCommand(
     private val secrets: SecretStore,
     private val importer: PurchaseInvoiceImporter,
+    private val smtpSender: SmtpPaymentNotificationSender,
 ) : ApplicationRunner, ExitCodeGenerator {
 
     private val loader = ImportConfigLoader()
@@ -30,30 +33,17 @@ class ImportCommand(
         when (args.nonOptionArgs.firstOrNull()) {
             COMMAND -> runImport(args)
             CHECK_TOKEN_COMMAND -> runCheckToken()
+            CHECK_SMTP_COMMAND -> runCheckSmtp(args)
             else -> {
-                System.err.println("Użycie: $COMMAND [--config=<plik>] | $CHECK_TOKEN_COMMAND")
+                System.err.println("Użycie: $COMMAND [--config=<plik>] | $CHECK_TOKEN_COMMAND | $CHECK_SMTP_COMMAND [--config=<plik>]")
                 exitCode = EXIT_USAGE
             }
         }
     }
 
     private fun runImport(args: ApplicationArguments) {
-        val configValues = args.getOptionValues(CONFIG_OPTION)
-        val configWithoutValue = args.optionNames.contains(CONFIG_OPTION) &&
-            configValues?.firstOrNull().isNullOrBlank()
-        if (args.nonOptionArgs != listOf(COMMAND) || configWithoutValue) {
-            System.err.println("Użycie: $COMMAND [--config=<plik>]")
-            exitCode = EXIT_USAGE
-            return
-        }
-        val path = Path.of(configValues?.firstOrNull() ?: DEFAULT_CONFIG_FILE)
-        val config = try {
-            loader.load(path)
-        } catch (e: ConfigException) {
-            System.err.println("Błąd konfiguracji: ${e.message}")
-            exitCode = EXIT_CONFIG_ERROR
-            return
-        }
+        val path = configPath(args, COMMAND) ?: return
+        val config = loadConfig(path) ?: return
         // Catch Throwable, not RuntimeException, so any unhandled failure, including Error, maps to exit code 4.
         val token = try {
             secrets.read(SecretName.KSEF_TOKEN)
@@ -95,6 +85,47 @@ class ImportCommand(
         }
     }
 
+    private fun configPath(args: ApplicationArguments, command: String): Path? {
+        val configValues = args.getOptionValues(CONFIG_OPTION)
+        val configWithoutValue = args.optionNames.contains(CONFIG_OPTION) &&
+            configValues?.firstOrNull().isNullOrBlank()
+        if (args.nonOptionArgs != listOf(command) || configWithoutValue) {
+            System.err.println("Użycie: $command [--config=<plik>]")
+            exitCode = EXIT_USAGE
+            return null
+        }
+        return Path.of(configValues?.firstOrNull() ?: DEFAULT_CONFIG_FILE)
+    }
+
+    private fun loadConfig(path: Path) =
+        try {
+            loader.load(path)
+        } catch (e: ConfigException) {
+            System.err.println("Błąd konfiguracji: ${e.message}")
+            exitCode = EXIT_CONFIG_ERROR
+            null
+        }
+
+    private fun runCheckSmtp(args: ApplicationArguments) {
+        val path = configPath(args, CHECK_SMTP_COMMAND) ?: return
+        val config = loadConfig(path) ?: return
+        println("Java: ${System.getProperty("java.version")} (${System.getProperty("java.home")})")
+        try {
+            smtpSender.checkConnection(config)
+            println("Połączenie SMTP z STARTTLS${if (config.smtp.username != null) " i uwierzytelnianie" else ""} powiodło się. Nie wysłano wiadomości.")
+            exitCode = EXIT_OK
+        } catch (e: SecretStoreException) {
+            System.err.println("Błąd magazynu sekretów: ${e.message}")
+            exitCode = EXIT_CONFIG_ERROR
+        } catch (e: MessagingException) {
+            log.error("Błąd testu SMTP", e)
+            System.err.println("Błąd testu SMTP:")
+            generateSequence(e as Throwable) { it.cause }
+                .forEach { System.err.println("${it.javaClass.simpleName}: ${it.message}") }
+            exitCode = EXIT_NOTIFICATION_ERROR
+        }
+    }
+
     private fun reportUnexpectedError(e: Throwable) {
         log.error("Nieoczekiwany błąd importu", e)
         System.err.println("Nieoczekiwany błąd importu: ${e.message}")
@@ -120,6 +151,7 @@ class ImportCommand(
         val log = LoggerFactory.getLogger(ImportCommand::class.java)
         const val COMMAND = "import"
         const val CHECK_TOKEN_COMMAND = "check-token"
+        const val CHECK_SMTP_COMMAND = "check-smtp"
         const val CONFIG_OPTION = "config"
         const val DEFAULT_CONFIG_FILE = "ksef-importer.yml"
         const val HISTORY_DB_FILE = "invoice-history.db"

@@ -31,6 +31,8 @@ data class SmtpSettings(
     val port: Int,
     val username: String?,
     val from: String,
+    /** Extra CA certificate trusted only for the SMTP connection (e.g. a root injected by antivirus). */
+    val caCertificate: Path? = null,
 )
 
 enum class KsefEnvironment(val value: String, val apiBaseUrl: String) {
@@ -59,10 +61,10 @@ class ImportConfigLoader {
         } catch (e: IOException) {
             throw ConfigException("Nie można odczytać pliku konfiguracyjnego $path: ${e.message}")
         }
-        return parse(text)
+        return parse(text, path.toAbsolutePath().parent)
     }
 
-    fun parse(yaml: String): ImportConfig {
+    fun parse(yaml: String, baseDir: Path = Path.of("")): ImportConfig {
         val file = parser.parse(yaml).withDefaults(defaults)
         val smtp = file.smtp
         val missing = mutableListOf<String>()
@@ -85,6 +87,10 @@ class ImportConfigLoader {
         if (!nip.matches(NIP_PATTERN)) {
             throw ConfigException("Nieprawidłowa wartość parametru nip: '$nip' (wymagane 10 cyfr)")
         }
+        val caCertificate = smtp?.caCertificate?.takeIf { it.isNotBlank() }?.let { baseDir.resolve(it) }
+        if (caCertificate != null && !Files.isRegularFile(caCertificate)) {
+            throw ConfigException("Nie znaleziono certyfikatu smtp.caCertificate: $caCertificate")
+        }
 
         val environment = file.ksef?.environment?.let {
             KsefEnvironment.fromValue(it)
@@ -102,6 +108,7 @@ class ImportConfigLoader {
                 port = checkNotNull(smtp?.port) { "Brak smtp.port w $DEFAULTS_RESOURCE" },
                 username = smtp?.username,
                 from = from,
+                caCertificate = caCertificate,
             ),
         )
     }

@@ -24,6 +24,12 @@ Polecenie `check-token` sprawdza, czy token KSeF jest zapisany w systemowym maga
 java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-token
 ```
 
+Polecenie `check-smtp` łączy się z serwerem SMTP z konfiguracji, wykonuje STARTTLS (i uwierzytelnianie, jeśli jest `smtp.username`), ale nie wysyła żadnej wiadomości. Użyj go do sprawdzenia certyfikatu i hasła SMTP:
+
+```sh
+java -jar build/libs/ksef-importer-0.0.1-SNAPSHOT.jar check-smtp --config=ksef-importer.yaml
+```
+
 Polecenie `import` loguje się tokenem KSeF (z magazynu sekretów) na NIP z konfiguracji i pobiera faktury zakupowe (podmiot 2, nabywca). Pierwszy import startuje od `startDate` (od północy czasu polskiego, Europe/Warsaw), a kolejne od czasu ostatniego udanego importu. Faktury są dodawane do Historii w lokalnej bazie SQLite `invoice-history.db`, leżącej obok pliku konfiguracyjnego. Ponowny import nie tworzy duplikatów (klucz: numer KSeF). Pliki XML są przetwarzane w pamięci i nie są zapisywane na dysku.
 
 Po imporcie wysyłany jest jeden zbiorczy e-mail HTML na adres `recipientEmail` z tabelą faktur zakupowych do zapłaty, których nie ma jeszcze w powiadomieniach (faktury oznaczone jako opłacone przy wystawieniu są pomijane). Kolumny w stałej kolejności: data wystawienia, numer KSeF, sprzedawca, adres, forma płatności, rachunek, kwota, termin płatności. W tabeli e-mail podaje nazwę i adres wystawcy, formę płatności (z kodu FA(3): 1 gotówka, 2 karta, 3 bon, 4 czek, 5 kredyt, 6 przelew, 7 mobilna) oraz, jeśli jest na fakturze, numer rachunku i nazwę banku. NIP wystawcy nie trafia do e-maila (pozostaje w bazie). Gdy nie ma takich faktur, e-mail nie jest wysyłany. Faktury trafiają do powiadomienia dopiero po udanej wysyłce. Błąd wysyłki (np. SMTP) nie cofa zapisu faktur, ale nie przesuwa daty ostatniego sukcesu: przebieg kończy się kodem `5`, a kolejny przebieg ponownie pobiera ten sam zakres i ponawia wysyłkę zaległych faktur.
@@ -32,12 +38,12 @@ Jeśli wiadomość została wysłana, ale aplikacja zakończyła się przed zapi
 
 Kody wyjścia:
 
-- `0` – konfiguracja poprawna, import zakończony (lub token zapisany, dla `check-token`)
+- `0` – konfiguracja poprawna, import zakończony (lub token zapisany, dla `check-token`; połączenie SMTP działa, dla `check-smtp`)
 - `1` – błąd konfiguracji (brak parametru, nieprawidłowa wartość, brak pliku) albo brak tokenu KSeF w magazynie sekretów; komunikat jest wypisywany na stderr
-- `2` – brak polecenia `import` lub `check-token`
+- `2` – brak polecenia `import`, `check-token` lub `check-smtp`
 - `3` – błąd KSeF (token odrzucony lub wygasły, błąd eksportu, brak połączenia); komunikat jest logowany jako błąd i wypisywany na stderr
 - `4` – nieoczekiwany błąd podczas importu (np. błąd wewnętrzny); komunikat jest logowany wraz z przyczyną i wypisywany na stderr
-- `5` – import zakończony, ale nie udało się wysłać powiadomienia (np. błąd SMTP); faktury są zapisane, ale nie są oznaczane jako powiadomione, data ostatniego sukcesu nie przesuwa się, a błąd jest logowany i wypisywany na stderr
+- `5` – import zakończony, ale nie udało się wysłać powiadomienia (np. błąd SMTP); faktury są zapisane, ale nie są oznaczane jako powiadomione, data ostatniego sukcesu nie przesuwa się, a błąd jest logowany i wypisywany na stderr; dla `check-smtp` oznacza błąd połączenia lub uwierzytelnienia SMTP
 
 ## Token KSeF
 
@@ -49,12 +55,12 @@ Token testowy (środowisko `test`) generuje osobna aplikacja `ksef-token-generat
   ```sh
   secret-tool store --label='KSeF token' service ksef-importer account ksef-token
   ```
-- Windows: Menedżer poświadczeń → Dane logowania systemu Windows → Dodaj poświadczenie ogólne, adres sieciowy `ksef-importer/ksef-token`, hasło = token.
+- Windows: Otwórz Menedżer poświadczeń, wybierz **Poświadczenia systemu Windows**, a w sekcji **Poświadczenia rodzajowe** kliknij **Dodaj poświadczenie rodzajowe**. W polu **Adres internetowy lub sieciowy** wpisz całą wartość `ksef-importer/ksef-token` (nie rozdzielaj jej na serwer i nazwę użytkownika), a w polu **Hasło** wklej token. Nazwa użytkownika nie jest używana przez aplikację.
 
 Hasło SMTP (potrzebne, gdy w `smtp` jest `username`) zapisujesz tak samo, pod nazwą `ksef-importer/smtp-password`:
 
 - Ubuntu: `secret-tool store --label='SMTP password' service ksef-importer account smtp-password`
-- Windows: poświadczenie ogólne o adresie sieciowym `ksef-importer/smtp-password`.
+- Windows: dodaj drugie **Poświadczenie rodzajowe** w Menedżerze poświadczeń. Wpisz całą wartość `ksef-importer/smtp-password` w polu adresu internetowego lub sieciowego (nie rozdzielaj jej na serwer i nazwę użytkownika), a hasło SMTP w polu hasła. Nazwa użytkownika nie jest używana przez aplikację.
 
 Ręczne sprawdzenie przepływu uwierzytelniania na TEST (bez aplikacji): kolekcja Postman [docs/postman/ksef-test-auth.postman_collection.json](docs/postman/ksef-test-auth.postman_collection.json) i environment [docs/postman/ksef-test.postman_environment.json](docs/postman/ksef-test.postman_environment.json). W environment wklej token w pole `ksefToken` (nie commituj go), potem uruchom requesty 1 → 6 po kolei. Kolejność jest istotna: request 3 korzysta z certyfikatu z requestu 1 i challenge z requestu 2.
 
@@ -78,7 +84,7 @@ smtp:
   from: ksef@example.com     # wymagane
 ```
 
-`startDate` określa początek pierwszego importu; późniejsze importy zaczynają się od ostatniego sukcesu. `recipientEmail` to adres odbiorcy powiadomień. `smtp.host` i `smtp.port` wskazują serwer SMTP, `smtp.from` to adres nadawcy, a `smtp.username` włącza uwierzytelnianie hasłem z magazynu sekretów. Serwer SMTP musi obsługiwać STARTTLS.
+`startDate` określa początek pierwszego importu; późniejsze importy zaczynają się od ostatniego sukcesu. `recipientEmail` to adres odbiorcy powiadomień. `smtp.host` i `smtp.port` wskazują serwer SMTP, `smtp.from` to adres nadawcy, a `smtp.username` włącza uwierzytelnianie hasłem z magazynu sekretów. Serwer SMTP musi obsługiwać STARTTLS. Opcjonalny `smtp.caCertificate` wskazuje plik certyfikatu CA (PEM/Base-64 `.cer`), któremu aplikacja ufa tylko przy połączeniu SMTP, np. gdy antywirus lub Norton podstawia własny certyfikat. Ścieżka względna jest liczona względem katalogu pliku konfiguracyjnego.
 
 `importTime` jest wczytywany i sprawdzany, ale **nie uruchamia importu**. Godzinę i częstotliwość ustawia się w harmonogramie systemowym; zmiana `importTime` nie zmienia harmonogramu.
 
