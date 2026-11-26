@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.LocalDate
 import java.time.LocalTime
@@ -128,5 +131,26 @@ class ImportConfigLoaderTest {
         val error = assertThrows<ConfigException> { loader.load(path) }
 
         assertTrue(error.message!!.contains("nie-ma-takiego-pliku.yml"), error.message)
+    }
+
+    @Test
+    fun `wzgledna sciezka caCertificate jest liczona wzgledem katalogu pliku konfiguracyjnego`(@TempDir dir: Path) {
+        Files.writeString(dir.resolve("norton-root.cer"), "")
+        val profile = dir.resolve("profil.yaml")
+        Files.writeString(profile, minimalValidYaml + "\n  caCertificate: norton-root.cer\n")
+
+        val config = loader.load(profile)
+
+        assertEquals(dir.resolve("norton-root.cer"), config.smtp.caCertificate)
+    }
+
+    @Test
+    fun `nieistniejacy caCertificate zglasza jego nazwe`(@TempDir dir: Path) {
+        val profile = dir.resolve("profil.yaml")
+        Files.writeString(profile, minimalValidYaml + "\n  caCertificate: brak.cer\n")
+
+        val error = assertThrows<ConfigException> { loader.load(profile) }
+
+        assertTrue(error.message!!.contains("brak.cer"), error.message)
     }
 }

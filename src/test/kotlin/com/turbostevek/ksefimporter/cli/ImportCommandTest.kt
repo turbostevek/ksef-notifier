@@ -9,6 +9,7 @@ import com.turbostevek.ksefimporter.ksef.InvoiceSource
 import com.turbostevek.ksefimporter.ksef.KsefClientFactory
 import com.turbostevek.ksefimporter.ksef.KsefImportService
 import com.turbostevek.ksefimporter.ksef.KsefToken
+import com.turbostevek.ksefimporter.notification.SmtpPaymentNotificationSender
 import com.turbostevek.ksefimporter.secrets.SecretName
 import com.turbostevek.ksefimporter.secrets.SecretStore
 import com.turbostevek.ksefimporter.secrets.SecretStoreException
@@ -55,7 +56,7 @@ class ImportCommandTest {
     fun `import bez tokenu KSeF konczy sie kodem 1`() {
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(1, command.exitCode)
@@ -66,7 +67,7 @@ class ImportCommandTest {
     fun `brak wymaganego parametru wypisuje czytelny blad i konczy sie kodem 1`() {
         val config = writeConfig(VALID_YAML.replace("startDate: 2026-01-01\n", ""))
 
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(1, command.exitCode)
@@ -75,7 +76,7 @@ class ImportCommandTest {
 
     @Test
     fun `brak polecenia import konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments())
 
         assertEquals(2, command.exitCode)
@@ -83,7 +84,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token z zapisanym tokenem konczy sie kodem 0 bez wypisywania wartosci`() {
-        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), importService)
+        val command = command(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(0, command.exitCode)
@@ -93,7 +94,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token bez tokenu wskazuje nazwe sekretu do ustawienia i konczy sie kodem 1`() {
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(1, command.exitCode)
@@ -102,7 +103,7 @@ class ImportCommandTest {
 
     @Test
     fun `check-token gdy magazyn sekretow zawiedzie konczy sie kodem 1`() {
-        val command = ImportCommand(FailingSecretStore(), importService)
+        val command = command(FailingSecretStore(), importService)
         command.run(DefaultApplicationArguments("check-token"))
 
         assertEquals(1, command.exitCode)
@@ -113,7 +114,7 @@ class ImportCommandTest {
     fun `config podany ze spacja zamiast znaku rownosci konczy sie kodem 2`() {
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config", config.toString()))
 
         assertEquals(2, command.exitCode)
@@ -121,7 +122,7 @@ class ImportCommandTest {
 
     @Test
     fun `config bez wartosci konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config"))
 
         assertEquals(2, command.exitCode)
@@ -129,7 +130,7 @@ class ImportCommandTest {
 
     @Test
     fun `config z pusta wartoscia po znaku rownosci konczy sie kodem 2`() {
-        val command = ImportCommand(FakeSecretStore(), importService)
+        val command = command(FakeSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config="))
 
         assertEquals(2, command.exitCode)
@@ -143,7 +144,7 @@ class ImportCommandTest {
         }, PaymentNotificationSender { _, _ -> })
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingService)
+        val command = command(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(4, command.exitCode)
@@ -161,7 +162,7 @@ class ImportCommandTest {
             throw IllegalStateException("SMTP niedostępny")
         })
 
-        val command = ImportCommand(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingNotifier)
+        val command = command(FakeSecretStore(SecretName.KSEF_TOKEN to SECRET_TOKEN), failingNotifier)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(5, command.exitCode)
@@ -169,10 +170,21 @@ class ImportCommandTest {
     }
 
     @Test
+    fun `check-smtp bez polaczenia z serwerem konczy sie kodem 5 i nie wysyla wiadomosci`() {
+        val config = writeConfig(VALID_YAML.replace("host: smtp.example.com", "host: 127.0.0.1\n  port: 1"))
+
+        val command = command(FakeSecretStore(), importService)
+        command.run(DefaultApplicationArguments("check-smtp", "--config=${config}"))
+
+        assertEquals(5, command.exitCode)
+        assertTrue(errBuffer.toString(Charsets.UTF_8).contains("Błąd testu SMTP"))
+    }
+
+    @Test
     fun `nieoczekiwany wyjatek z magazynu sekretow podczas importu konczy sie kodem 4`() {
         val config = writeConfig(VALID_YAML)
 
-        val command = ImportCommand(CrashingSecretStore(), importService)
+        val command = command(CrashingSecretStore(), importService)
         command.run(DefaultApplicationArguments("import", "--config=${config}"))
 
         assertEquals(4, command.exitCode)
@@ -181,6 +193,9 @@ class ImportCommandTest {
 
     private fun writeConfig(yaml: String): Path =
         dir.resolve("ksef-importer.yml").also { Files.writeString(it, yaml) }
+
+    private fun command(secrets: SecretStore, importer: PurchaseInvoiceImporter) =
+        ImportCommand(secrets, importer, SmtpPaymentNotificationSender(secrets))
 
     private class FakeSecretStore(vararg entries: Pair<SecretName, String>) : SecretStore {
         private val values = mapOf(*entries)
